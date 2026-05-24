@@ -1,0 +1,351 @@
+---
+/**
+ * Navbar.astro — navegación principal
+ *
+ * Recibe el usuario opcional (null si no autenticado).
+ * Se usa en Base.astro pasando el resultado de getOptionalUser().
+ */
+import type { AuthUser } from '../../lib/auth';
+
+interface Props {
+  user: AuthUser | null;
+  currentPath?: string;
+}
+
+const { user, currentPath = '' } = Astro.props;
+
+const navLinks = [
+  { href: '/',              label: 'Torneos'   },
+  { href: '/sports/football', label: 'Fútbol'  },
+  { href: '/sports/basketball', label: 'Basket' },
+  { href: '/sports/tennis', label: 'Tenis'     },
+];
+
+function isActive(href: string): boolean {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
+}
+---
+
+<header class="navbar">
+  <div class="navbar__inner">
+
+    <!-- Logo -->
+    <a href="/" class="navbar__logo" aria-label="Parches inicio">
+      <span class="navbar__logo-mark">S</span>
+      <span class="navbar__logo-text">Sport<em>Stream</em></span>
+    </a>
+
+    <!-- Nav links (desktop) -->
+    <nav class="navbar__links" aria-label="Navegación principal">
+      {navLinks.map(link => (
+        <a
+          href={link.href}
+          class={`navbar__link ${isActive(link.href) ? 'navbar__link--active' : ''}`}
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
+
+    <!-- Right side -->
+    <div class="navbar__actions">
+      <!-- Live indicator (siempre visible) -->
+      <a href="/?filter=live" class="badge-live" aria-label="Ver partidos en vivo">
+        En vivo
+      </a>
+
+      {user ? (
+        <!-- Usuario autenticado -->
+        <div class="navbar__user">
+          <a href={`/users/${user.id}`} class="navbar__user-btn" title={user.name}>
+            <span class="navbar__user-avatar" aria-hidden="true">
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+            <span class="navbar__user-name">{user.name.split(' ')[0]}</span>
+          </a>
+          <a href="/auth/logout" class="btn-ghost" style="padding: 7px 14px; font-size: 0.8rem;">
+            Salir
+          </a>
+        </div>
+      ) : (
+        <!-- Sin sesión -->
+        <div class="navbar__auth">
+          <a href="/login" class="btn-ghost" style="padding: 8px 16px;">
+            Ingresar
+          </a>
+          <a href="/register" class="btn-accent" style="padding: 8px 16px;">
+            Registrarse
+          </a>
+        </div>
+      )}
+
+      <!-- Mobile menu toggle -->
+      <button
+        class="navbar__hamburger"
+        aria-label="Abrir menú"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        id="hamburger-btn"
+      >
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div class="navbar__mobile" id="mobile-menu" aria-hidden="true">
+    <nav class="navbar__mobile-links">
+      {navLinks.map(link => (
+        <a
+          href={link.href}
+          class={`navbar__mobile-link ${isActive(link.href) ? 'navbar__mobile-link--active' : ''}`}
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
+    <div class="navbar__mobile-auth">
+      {user ? (
+        <>
+          <a href={`/users/${user.id}`} class="btn-ghost" style="width:100%; justify-content:center;">
+            Mi perfil
+          </a>
+          <a href="/auth/logout" class="btn-ghost" style="width:100%; justify-content:center;">
+            Salir
+          </a>
+        </>
+      ) : (
+        <>
+          <a href="/login" class="btn-ghost" style="width:100%; justify-content:center;">
+            Ingresar
+          </a>
+          <a href="/register" class="btn-accent" style="width:100%; justify-content:center;">
+            Registrarse
+          </a>
+        </>
+      )}
+    </div>
+  </div>
+</header>
+
+<style>
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10, 12, 15, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.navbar__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+/* Logo */
+.navbar__logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.navbar__logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--accent);
+  color: #000;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0;
+}
+.navbar__logo-text {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.navbar__logo-text em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+/* Nav links */
+.navbar__links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.navbar__link {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
+}
+.navbar__link:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+.navbar__link--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Right actions */
+.navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* User menu */
+.navbar__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.navbar__user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition);
+}
+.navbar__user-btn:hover { border-color: var(--border-hover); }
+
+.navbar__user-avatar {
+  width: 28px;
+  height: 28px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.navbar__user-name {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.navbar__auth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Hamburger */
+.navbar__hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+.navbar__hamburger:hover { background: var(--bg-raised); }
+.navbar__hamburger span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text-secondary);
+  border-radius: 1px;
+  transition: transform var(--transition), opacity var(--transition);
+}
+.navbar__hamburger[aria-expanded="true"] span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.navbar__hamburger[aria-expanded="true"] span:nth-child(2) {
+  opacity: 0;
+}
+.navbar__hamburger[aria-expanded="true"] span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Mobile menu */
+.navbar__mobile {
+  display: none;
+  border-top: 1px solid var(--border);
+  padding: 16px 24px 20px;
+}
+.navbar__mobile[aria-hidden="false"] {
+  display: block;
+}
+.navbar__mobile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+}
+.navbar__mobile-link {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
+}
+.navbar__mobile-link:hover,
+.navbar__mobile-link--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.navbar__mobile-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .navbar__links,
+  .navbar__auth,
+  .navbar__user { display: none; }
+  .navbar__hamburger { display: flex; }
+}
+</style>
+
+<script>
+  const btn = document.getElementById('hamburger-btn');
+  const menu = document.getElementById('mobile-menu');
+  btn?.addEventListener('click', () => {
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!open));
+    menu?.setAttribute('aria-hidden', String(open));
+  });
+</script>

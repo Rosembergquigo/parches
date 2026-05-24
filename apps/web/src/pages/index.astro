@@ -1,0 +1,8 @@
+---
+const res = await fetch(`${import.meta.env.STREAMING_DATA_URL}/tournaments`).catch(() => null);
+const tournaments = res?.ok ? await res.json() : [];
+---
+<html lang="es">
+  <head><meta charset="UTF-8" /><title>Parches</title></head>
+  <body><h1>Torneos en vivo</h1></body>
+</html>

@@ -1,0 +1,16 @@
+---
+/**
+ * pages/auth/logout.astro
+ * Limpia la cookie y redirige al home.
+ * No necesita UI — es una acción pura.
+ */
+import { buildLogoutCookie } from '../../lib/auth';
+
+return new Response(null, {
+  status: 302,
+  headers: {
+    'Location': '/',
+    'Set-Cookie': buildLogoutCookie(),
+  },
+});
+---

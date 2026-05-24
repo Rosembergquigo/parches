@@ -1,0 +1,144 @@
+---
+/**
+ * Base.astro — layout raíz de toda la aplicación.
+ *
+ * Responsabilidades:
+ *  - Head con meta SEO configurable por página
+ *  - Carga el usuario de sesión (opcional, no bloquea)
+ *  - Renderiza Navbar con estado de auth
+ *  - Slot principal + slot footer
+ *
+ * Uso:
+ *   <Base title="Torneos | Parches" description="...">
+ *     <main>...contenido de la página...</main>
+ *   </Base>
+ */
+
+import Navbar from '../components/nav/Navbar.astro';
+import { getOptionalUser } from '../lib/auth';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  noIndex?: boolean;   // para páginas de usuario privadas
+}
+
+const {
+  title = 'Parches — Marketplace de Torneos',
+  description = 'Sigue torneos y partidos en vivo de fútbol, básquet, tenis y más.',
+  ogImage = '/og-default.jpg',
+  noIndex = false,
+} = Astro.props;
+
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
+
+// Carga silenciosa del usuario — nunca bloquea si el api no responde
+const user = await getOptionalUser(Astro.request).catch(() => null);
+---
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO primario -->
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonicalUrl} />
+  {noIndex && <meta name="robots" content="noindex, nofollow" />}
+
+  <!-- Open Graph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:title"       content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:image"       content={ogImage} />
+  <meta property="og:url"         content={canonicalUrl} />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:title"       content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image"       content={ogImage} />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <!-- Preconnect fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+</head>
+
+<body>
+  <Navbar user={user} currentPath={Astro.url.pathname} />
+
+  <slot />
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <div class="site-footer__brand">
+        <span class="navbar__logo-mark" style="display:inline-flex;width:24px;height:24px;font-size:0.85rem;">S</span>
+        <span style="font-family:var(--font-display);font-size:0.9rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">
+          Sport<em style="font-style:normal;color:var(--accent);">Stream</em>
+        </span>
+      </div>
+      <p class="site-footer__copy">
+        &copy; {new Date().getFullYear()} Parches. Todos los derechos reservados.
+      </p>
+      <nav class="site-footer__links" aria-label="Links del pie">
+        <a href="/about">Nosotros</a>
+        <a href="/terms">Términos</a>
+        <a href="/privacy">Privacidad</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
+
+<style>
+.site-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding: 32px 24px;
+}
+.site-footer__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.site-footer__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.site-footer__copy {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex: 1;
+}
+.site-footer__links {
+  display: flex;
+  gap: 20px;
+}
+.site-footer__links a {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+.site-footer__links a:hover { color: var(--text-secondary); }
+
+/* Layout principal con footer pegado al fondo */
+:global(body) {
+  display: flex;
+  flex-direction: column;
+}
+:global(body > .site-footer) {
+  margin-top: auto;
+}
+</style>

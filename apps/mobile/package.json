@@ -1,0 +1,27 @@
+{
+  "name": "@parches/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build:ios": "eas build --platform ios",
+    "build:android": "eas build --platform android",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@parches/types": "workspace:*",
+    "@parches/config": "workspace:*",
+    "@parches/utils": "workspace:*",
+    "expo": "~51.0.0",
+    "expo-router": "~3.5.0",
+    "react": "18.2.0",
+    "react-native": "0.74.0",
+    "react-native-video": "^6.3.3"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "typescript": "^5.4.5"
+  }
+}

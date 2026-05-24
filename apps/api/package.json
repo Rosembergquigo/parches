@@ -1,0 +1,28 @@
+{
+  "name": "@parches/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@parches/types": "workspace:*",
+    "@parches/config": "workspace:*",
+    "fastify": "^4.27.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@prisma/client": "^5.14.0",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "prisma": "^5.14.0",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7",
+    "tsx": "^4.10.5"
+  }
+}

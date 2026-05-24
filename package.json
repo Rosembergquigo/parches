@@ -1,0 +1,27 @@
+{
+  "name": "parches",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter='./apps/*' dev",
+    "dev:web": "pnpm --filter=@parches/web dev",
+    "dev:api": "pnpm --filter=@parches/api dev",
+    "dev:streaming-data": "pnpm --filter=@parches/streaming-data dev",
+    "dev:streaming-video": "pnpm --filter=@parches/streaming-video dev",
+    "build": "pnpm --filter='./packages/*' build && pnpm --filter='./apps/*' build",
+    "db:migrate": "pnpm --filter=@parches/api db:migrate",
+    "db:generate": "pnpm --filter=@parches/api db:generate",
+    "lint": "pnpm --recursive lint",
+    "type-check": "pnpm --recursive type-check",
+    "clean": "pnpm --recursive exec rm -rf dist .turbo node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7",
+    "turbo": "^2.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

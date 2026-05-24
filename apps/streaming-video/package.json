@@ -1,0 +1,23 @@
+{
+  "name": "@parches/streaming-video",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@parches/types": "workspace:*",
+    "@parches/config": "workspace:*",
+    "fastify": "^4.27.0",
+    "@fastify/cors": "^9.0.1",
+    "node-media-server": "^2.6.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7",
+    "tsx": "^4.10.5"
+  }
+}

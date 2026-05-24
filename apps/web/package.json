@@ -1,0 +1,30 @@
+{
+  "name": "@parches/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "type-check": "astro check"
+  },
+  "dependencies": {
+    "@parches/types": "workspace:*",
+    "@parches/config": "workspace:*",
+    "@parches/utils": "workspace:*",
+    "astro": "^4.8.0",
+    "@astrojs/react": "^3.3.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "@astrojs/node": "^8.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.3",
+    "jose": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      UserRole @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  refereedMatches Match[] @relation("referee")
+}
+
+enum UserRole {
+  VIEWER
+  REFEREE
+  ORGANIZER
+  ADMIN
+}
+
+model Tournament {
+  id        String           @id @default(uuid())
+  name      String
+  sport     String
+  status    TournamentStatus @default(UPCOMING)
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime         @default(now())
+
+  teams  Team[]
+  matches Match[]
+}
+
+enum TournamentStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+}
+
+model Team {
+  id           String     @id @default(uuid())
+  name         String
+  logoUrl      String?
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+
+  homeMatches Match[] @relation("homeTeam")
+  awayMatches Match[] @relation("awayTeam")
+}
+
+model Match {
+  id           String      @id @default(uuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id])
+  homeTeamId   String
+  homeTeam     Team        @relation("homeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId   String
+  awayTeam     Team        @relation("awayTeam", fields: [awayTeamId], references: [id])
+  homeScore    Int         @default(0)
+  awayScore    Int         @default(0)
+  status       MatchStatus @default(SCHEDULED)
+  streamKey    String?     @unique
+  refereeId    String?
+  referee      User?       @relation("referee", fields: [refereeId], references: [id])
+  startedAt    DateTime?
+  createdAt    DateTime    @default(now())
+
+  events MatchEvent[]
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  HALFTIME
+  FINISHED
+}
+
+model MatchEvent {
+  id        String   @id @default(uuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id])
+  type      String
+  clock     String
+  teamId    String?
+  playerId  String?
+  payload   Json?
+  createdAt DateTime @default(now())
+}
