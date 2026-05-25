@@ -1,0 +1,231 @@
+---
+/**
+ * LiveStrip.astro — barra horizontal de partidos en vivo.
+ *
+ * Aparece entre el hero y las filas de torneos.
+ * Cada card es un <a> que navega directo a /matches/[id].
+ * Si no hay partidos en vivo, el componente no renderiza nada.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { MatchSnippet, Sport } from '../../data/mock';
+
+interface LiveMatch extends MatchSnippet {
+  _tournament: string;
+  _sport: Sport;
+}
+
+interface Props {
+  matches: LiveMatch[];
+}
+
+const { matches } = Astro.props;
+if (matches.length === 0) return;
+---
+
+<section class="live-strip-section" aria-label="Partidos en vivo ahora">
+  <div class="live-strip-section__header">
+    <div class="live-strip-section__title">
+      <span class="live-dot-big" aria-hidden="true"></span>
+      Partidos en vivo
+    </div>
+    <a href="/?filter=live" class="live-strip-section__more">
+      Ver todos →
+    </a>
+  </div>
+
+  <div class="live-strip" role="list">
+    {matches.map(m => (
+      <a
+        href={`/matches/${m.id}`}
+        class="lsc"
+        role="listitem"
+        aria-label={`${m.homeTeam.name} ${m.homeScore} - ${m.awayScore} ${m.awayTeam.name}, ${m.clock}`}
+      >
+        <!-- Top: sport + clock -->
+        <div class="lsc__top">
+          <div class="lsc__sport">
+            <SportIcon sport={m._sport} size={11} stroke="rgba(255,255,255,0.5)" />
+            {m._sport.charAt(0).toUpperCase() + m._sport.slice(1)}
+          </div>
+          <div class="lsc__clock">
+            <span class="lsc__dot" aria-hidden="true"></span>
+            {m.clock}
+          </div>
+        </div>
+
+        <!-- Teams + scores -->
+        <div class="lsc__match">
+          <span class="lsc__team">{m.homeTeam.name.split(' ')[0]}</span>
+          <span class="lsc__score">{m.homeScore}—{m.awayScore}</span>
+          <span class="lsc__team lsc__team--right">{m.awayTeam.name.split(' ')[0]}</span>
+        </div>
+
+        <!-- Tournament -->
+        <div class="lsc__bottom">{m._tournament}</div>
+      </a>
+    ))}
+  </div>
+</section>
+
+<style>
+.live-strip-section {
+  padding: 24px 24px 0;
+}
+
+/* Header */
+.live-strip-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.live-strip-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.live-dot-big {
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.65); }
+}
+.live-strip-section__more {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.live-strip-section__more:hover { color: var(--text-primary); }
+
+/* Scroll strip */
+.live-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
+  mask-image: linear-gradient(to right, black 88%, transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.live-strip::-webkit-scrollbar { height: 2px; }
+.live-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Live strip card */
+.lsc {
+  flex-shrink: 0;
+  width: 185px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--live);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px 10px;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.lsc:hover {
+  border-color: rgba(255, 59, 59, 0.45);
+  border-top-color: var(--live);
+  transform: translateY(-2px);
+}
+
+.lsc__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.lsc__sport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.lsc__clock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--live);
+}
+.lsc__dot {
+  width: 5px;
+  height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.lsc__match {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.lsc__team {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lsc__team--right { text-align: right; }
+.lsc__score {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.lsc__bottom {
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

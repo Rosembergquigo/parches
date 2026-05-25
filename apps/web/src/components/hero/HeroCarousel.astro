@@ -1,0 +1,458 @@
+---
+/**
+ * HeroCarousel.astro — hero del marketplace.
+ *
+ * Muestra los partidos en vivo más vistos como slides.
+ * Auto-rota cada 5 segundos. Flechas y dots para navegación manual.
+ * Sin dependencias externas — script vanilla en el componente.
+ *
+ * El script es declarativo: busca elementos por ID/clase en el DOM
+ * generado por Astro. Safe para SSR porque se ejecuta post-hydration.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { MatchSnippet, Sport } from '../../data/mock';
+
+interface HeroMatch extends MatchSnippet {
+  tournamentName: string;
+  sport: Sport;
+  stage?: string;
+}
+
+interface Props {
+  matches: HeroMatch[];
+}
+
+const { matches } = Astro.props;
+
+function formatViewers(n?: number): string {
+  if (!n) return '';
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+// Gradient per sport
+const slideBg: Record<Sport, string> = {
+  football:   'linear-gradient(135deg, #0d1e35 0%, #102a1a 60%, #0a0c0f 100%)',
+  basketball: 'linear-gradient(135deg, #1e1a0d 0%, #2b1a08 55%, #0a0c0f 100%)',
+  tennis:     'linear-gradient(135deg, #1a0d1e 0%, #0d1a2b 55%, #0a0c0f 100%)',
+  volleyball: 'linear-gradient(135deg, #08122b 0%, #0a2e4d 55%, #0a0c0f 100%)',
+  baseball:   'linear-gradient(135deg, #1e0a12 0%, #4d0a2e 55%, #0a0c0f 100%)',
+  hockey:     'linear-gradient(135deg, #0e0a1e 0%, #1a0a4d 55%, #0a0c0f 100%)',
+};
+---
+
+<div class="hero" id="hero" aria-label="Partido destacado">
+
+  <!-- Track -->
+  <div class="hero__track" id="heroTrack">
+    {matches.map((m, i) => {
+      const homeWins = m.homeScore > m.awayScore;
+      const awayWins = m.awayScore > m.homeScore;
+      return (
+        <div
+          class="hero__slide"
+          style={`background: ${slideBg[m.sport]}`}
+          role="group"
+          aria-roledescription="slide"
+          aria-label={`Slide ${i + 1}: ${m.homeTeam.name} vs ${m.awayTeam.name}`}
+        >
+          <!-- Grid overlay texture -->
+          <div class="hero__grid" aria-hidden="true"></div>
+          <!-- Bottom fade -->
+          <div class="hero__fade" aria-hidden="true"></div>
+
+          <!-- Content -->
+          <div class="hero__content">
+            <div class="hero__left">
+
+              <!-- Meta row -->
+              <div class="hero__meta">
+                <div class="hero__live-pill">
+                  <span class="hero__live-dot" aria-hidden="true"></span>
+                  En vivo
+                </div>
+                <div class="hero__sport-badge">
+                  <SportIcon sport={m.sport} size={12} stroke="var(--accent)" />
+                  {m.sport.charAt(0).toUpperCase() + m.sport.slice(1)}
+                </div>
+                <div class="hero__tournament">{m.tournamentName}{m.stage ? ` · ${m.stage}` : ''}</div>
+              </div>
+
+              <!-- Teams + score -->
+              <div class="hero__match">
+                <div class="hero__team">{m.homeTeam.name}</div>
+                <div class="hero__scorebox">
+                  <div class="hero__score">
+                    <span class:list={[homeWins && 'hero__score-win']}>{m.homeScore}</span>
+                    <span class="hero__score-sep">—</span>
+                    <span class:list={[awayWins && 'hero__score-win']}>{m.awayScore}</span>
+                  </div>
+                  <div class="hero__clock">● {m.clock}</div>
+                  <div class="hero__period">{m.period}</div>
+                </div>
+                <div class="hero__team">{m.awayTeam.name}</div>
+              </div>
+
+              <!-- Actions -->
+              <div class="hero__actions">
+                <a href={`/matches/${m.id}`} class="hero__btn-watch">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                  Ver partido
+                </a>
+                <a href={`/matches/${m.id}#stats`} class="hero__btn-info">
+                  Estadísticas
+                </a>
+                {m.viewerCount && (
+                  <span class="hero__viewers">● {formatViewers(m.viewerCount)} viendo</span>
+                )}
+              </div>
+
+            </div><!-- /.hero__left -->
+          </div><!-- /.hero__content -->
+        </div>
+      );
+    })}
+  </div><!-- /.hero__track -->
+
+  <!-- Prev arrow -->
+  <button class="hero__arr hero__arr--prev" id="heroPrev" aria-label="Partido anterior">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+
+  <!-- Next arrow -->
+  <button class="hero__arr hero__arr--next" id="heroNext" aria-label="Partido siguiente">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <polyline points="9 18 15 12 9 6"/>
+    </svg>
+  </button>
+
+  <!-- Dots -->
+  <div class="hero__dots" role="tablist" aria-label="Partidos destacados">
+    {matches.map((_, i) => (
+      <button
+        class:list={['hero__dot', i === 0 && 'hero__dot--active']}
+        data-index={i}
+        role="tab"
+        aria-selected={i === 0 ? 'true' : 'false'}
+        aria-label={`Partido ${i + 1}`}
+      ></button>
+    ))}
+  </div>
+
+</div><!-- /.hero -->
+
+<style>
+.hero {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+}
+
+/* ── Track & slides ────────────────────────────────────── */
+.hero__track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.hero__slide {
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Grid texture overlay */
+.hero__grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px);
+  pointer-events: none;
+}
+
+/* Bottom gradient fade */
+.hero__fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10,12,15,0.96) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+/* ── Content ────────────────────────────────────────────── */
+.hero__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 0 28px 28px;
+}
+
+/* Meta row */
+.hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.hero__live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: var(--live-dim);
+  border: 1px solid var(--live);
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--live);
+}
+.hero__live-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.65); }
+}
+.hero__sport-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,229,255,0.25);
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.hero__tournament {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Match block */
+.hero__match {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+.hero__team {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  flex: 1;
+}
+.hero__team:last-of-type { text-align: right; }
+
+.hero__scorebox { text-align: center; flex-shrink: 0; }
+.hero__score {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+.hero__score-sep { color: var(--text-muted); font-size: 80%; }
+.hero__score-win { color: var(--accent); }
+.hero__clock {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--live);
+  margin-top: 4px;
+}
+.hero__period {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Actions */
+.hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hero__btn-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #000;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.hero__btn-watch:hover { opacity: 0.88; transform: translateY(-1px); }
+
+.hero__btn-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 16px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+.hero__btn-info:hover { border-color: var(--border-hover); }
+
+.hero__viewers {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ── Controls ────────────────────────────────────────────── */
+.hero__arr {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+.hero__arr:hover { background: rgba(0, 0, 0, 0.75); }
+.hero__arr--prev { left: 14px; }
+.hero__arr--next { right: 14px; }
+
+.hero__dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+}
+.hero__dot {
+  width: 20px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: width 0.3s ease, background 0.3s ease;
+  padding: 0;
+}
+.hero__dot--active {
+  width: 32px;
+  background: var(--accent);
+}
+
+/* Hide arrows if only one slide */
+.hero:has(.hero__slide:only-child) .hero__arr,
+.hero:has(.hero__slide:only-child) .hero__dots {
+  display: none;
+}
+</style>
+
+<script>
+  // Vanilla carousel — no dependencies, runs after DOM is ready
+  (function () {
+    const track  = document.getElementById('heroTrack') as HTMLElement | null;
+    const prev   = document.getElementById('heroPrev') as HTMLButtonElement | null;
+    const next   = document.getElementById('heroNext') as HTMLButtonElement | null;
+    const dots   = document.querySelectorAll<HTMLButtonElement>('.hero__dot');
+    const slides = document.querySelectorAll<HTMLElement>('.hero__slide');
+
+    if (!track || slides.length < 2) return;
+
+    let cur = 0;
+    let timer: ReturnType<typeof setInterval>;
+
+    function goTo(index: number) {
+      cur = ((index % slides.length) + slides.length) % slides.length;
+      track!.style.transform = `translateX(-${cur * 100}%)`;
+      dots.forEach((d, i) => {
+        const active = i === cur;
+        d.classList.toggle('hero__dot--active', active);
+        d.setAttribute('aria-selected', String(active));
+      });
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      timer = setInterval(() => goTo(cur + 1), 5000);
+    }
+
+    prev?.addEventListener('click', () => { goTo(cur - 1); resetTimer(); });
+    next?.addEventListener('click', () => { goTo(cur + 1); resetTimer(); });
+    dots.forEach(d => {
+      d.addEventListener('click', () => {
+        goTo(Number(d.dataset.index));
+        resetTimer();
+      });
+    });
+
+    // Pause on hover
+    const hero = document.getElementById('hero');
+    hero?.addEventListener('mouseenter', () => clearInterval(timer));
+    hero?.addEventListener('mouseleave', () => resetTimer());
+
+    resetTimer();
+  })();
+</script>

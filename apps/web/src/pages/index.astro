@@ -1,8 +1,131 @@
 ---
-const res = await fetch(`${import.meta.env.STREAMING_DATA_URL}/tournaments`).catch(() => null);
-const tournaments = res?.ok ? await res.json() : [];
+/**
+ * pages/index.astro — Marketplace principal de Parches.
+ *
+ * Para conectar la API real, reemplaza los imports de mock por:
+ *   import { getTournaments } from '../lib/api';
+ *   const tournaments = await getTournaments(Astro.request);
+ */
+import Base from '../layouts/Base.astro';
+import HeroCarousel from '../components/hero/HeroCarousel.astro';
+import LiveStrip from '../components/match/LiveStrip.astro';
+import SportTabs from '../components/tournament/SportTabs.astro';
+import TournamentRow from '../components/tournament/TournamentRow.astro';
+
+import {
+  MOCK_TOURNAMENTS,
+  MOCK_HERO_MATCHES,
+  MOCK_LIVE_MATCHES,
+  type Sport,
+} from '../data/mock';
+
+const tournaments = MOCK_TOURNAMENTS;
+const heroMatches = MOCK_HERO_MATCHES;
+const liveMatches = MOCK_LIVE_MATCHES as any[];
+
+const activeSports: Sport[] = [...new Set(tournaments.map(t => t.sport))];
+
+const liveCount = liveMatches.length;
+const pageTitle = liveCount > 0
+  ? `Parches — ${liveCount} Partido${liveCount > 1 ? 's' : ''} en Vivo`
+  : 'Parches — Marketplace de Torneos';
+const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis, voleibol y más deportes colombianos.';
 ---
-<html lang="es">
-  <head><meta charset="UTF-8" /><title>Parches</title></head>
-  <body><h1>Torneos en vivo</h1></body>
-</html>
+
+<Base title={pageTitle} description={pageDesc}>
+
+  {heroMatches.length > 0 && (
+    <HeroCarousel matches={heroMatches} />
+  )}
+
+  {heroMatches.length === 0 && (
+    <div class="hero-empty">
+      <p class="display-md" style="color: var(--text-secondary);">
+        No hay partidos en vivo ahora mismo
+      </p>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 8px;">
+        Revisa la programación de torneos abajo
+      </p>
+    </div>
+  )}
+
+  <main class="marketplace">
+
+    {liveMatches.length > 0 && (
+      <LiveStrip matches={liveMatches} />
+    )}
+
+    <section class="tournaments" aria-label="Torneos activos">
+      <div class="tournaments__header">
+        <h2 class="tournaments__title">Torneos activos</h2>
+        <a href="/tournaments" class="tournaments__explore">Explorar todos →</a>
+      </div>
+
+      <SportTabs sports={activeSports} />
+
+      {tournaments.map(tournament => (
+        <TournamentRow tournament={tournament} />
+      ))}
+
+      {tournaments.length === 0 && (
+        <div class="tournaments__empty">
+          <p>No hay torneos activos en este momento.</p>
+        </div>
+      )}
+    </section>
+
+  </main>
+
+</Base>
+
+<style>
+.hero-empty {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.marketplace {
+  flex: 1;
+  padding-bottom: 60px;
+}
+.tournaments {
+  padding-top: 28px;
+}
+.tournaments__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 24px;
+  margin-bottom: 18px;
+}
+.tournaments__title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.tournaments__explore {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.tournaments__explore:hover { color: var(--text-primary); }
+.tournaments__empty {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+</style>

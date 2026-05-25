@@ -1,0 +1,167 @@
+---
+/**
+ * TournamentRow.astro — fila completa de un torneo.
+ *
+ * Estructura:
+ *   [header: icono deporte + nombre + stage + "Ver torneo →"]
+ *   [scroll horizontal de MatchCards]
+ *
+ * El `data-sport` en el wrapper lo usa el filtro de tabs en el cliente
+ * para mostrar/ocultar filas sin re-render del servidor.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import MatchCard from '../match/MatchCard.astro';
+import type { TournamentWithMatches } from '../../data/mock';
+
+interface Props {
+  tournament: TournamentWithMatches;
+}
+
+const { tournament } = Astro.props;
+const { slug, name, sport, stage, matches, teamCount } = tournament;
+
+const liveCount = matches.filter(m => m.status === 'LIVE').length;
+
+const sportBgClass: Record<string, string> = {
+  football:   'sport-icon--football',
+  basketball: 'sport-icon--basketball',
+  tennis:     'sport-icon--tennis',
+  volleyball: 'sport-icon--volleyball',
+  baseball:   'sport-icon--baseball',
+  hockey:     'sport-icon--hockey',
+};
+
+const metaParts = [
+  sport.charAt(0).toUpperCase() + sport.slice(1),
+  stage,
+  liveCount > 0 ? `${liveCount} partido${liveCount > 1 ? 's' : ''} en vivo` : null,
+  !liveCount && teamCount ? `${teamCount} equipos` : null,
+].filter(Boolean).join(' · ');
+---
+
+<section class="t-row" data-sport={sport} aria-label={`Torneo: ${name}`}>
+
+  <!-- Row header -->
+  <div class="t-row__header">
+    <div class="t-row__left">
+      <div class:list={['sport-icon', sportBgClass[sport]]}>
+        <SportIcon sport={sport} size={16} />
+      </div>
+      <div class="t-row__info">
+        <h2 class="t-row__name">{name}</h2>
+        <p class="t-row__meta">{metaParts}</p>
+      </div>
+    </div>
+
+    <a href={`/tournaments/${slug}`} class="t-row__more" aria-label={`Ver torneo ${name}`}>
+      Ver torneo
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </a>
+  </div>
+
+  <!-- Match cards horizontal strip -->
+  <div class="t-row__strip" role="list" aria-label={`Partidos de ${name}`}>
+    {matches.map(match => (
+      <div role="listitem">
+        <MatchCard match={match} />
+      </div>
+    ))}
+  </div>
+
+</section>
+
+<style>
+.t-row {
+  margin-bottom: 32px;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.t-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  margin-bottom: 12px;
+}
+.t-row__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Sport icon pill */
+.sport-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sport-icon--football   { background: linear-gradient(135deg, #0a1e12, #1a4d2e); }
+.sport-icon--basketball { background: linear-gradient(135deg, #1e120a, #4d2e0a); }
+.sport-icon--tennis     { background: linear-gradient(135deg, #141e08, #2e4d0a); }
+.sport-icon--volleyball { background: linear-gradient(135deg, #08122b, #0a2e4d); }
+.sport-icon--baseball   { background: linear-gradient(135deg, #1e0a12, #4d0a2e); }
+.sport-icon--hockey     { background: linear-gradient(135deg, #0e0a1e, #1a0a4d); }
+
+.t-row__info {}
+.t-row__name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.t-row__meta {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+.t-row__more {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+  flex-shrink: 0;
+}
+.t-row__more:hover { color: var(--text-primary); }
+
+/* ── Match strip ────────────────────────────────────────── */
+.t-row__strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 24px 8px;
+  /* fade-out right edge hint */
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.t-row__strip::-webkit-scrollbar {
+  height: 2px;
+}
+.t-row__strip::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+</style>

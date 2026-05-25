@@ -1,0 +1,157 @@
+---
+/**
+ * SportTabs.astro — tabs con SVG por deporte para filtrar filas de torneos.
+ *
+ * El filtro funciona en cliente: togglea data-sport en las .t-row
+ * sin llamar al servidor. El script es inline y se ejecuta al cargar.
+ *
+ * Si se agrega un torneo nuevo con un deporte no listado aquí,
+ * el tab "Todos" lo mostrará igual — no se rompe.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { Sport } from '../../data/mock';
+
+interface Props {
+  sports: Sport[];       // deportes presentes en la página (derivado de los torneos)
+  active?: Sport | 'all';
+}
+
+const { sports, active = 'all' } = Astro.props;
+
+const LABELS: Record<Sport | 'all', string> = {
+  all:        'Todos',
+  football:   'Fútbol',
+  basketball: 'Basket',
+  tennis:     'Tenis',
+  volleyball: 'Voleibol',
+  baseball:   'Béisbol',
+  hockey:     'Hockey',
+};
+
+const BG_CLASS: Record<Sport | 'all', string> = {
+  all:        'stab-bg--all',
+  football:   'stab-bg--football',
+  basketball: 'stab-bg--basketball',
+  tennis:     'stab-bg--tennis',
+  volleyball: 'stab-bg--volleyball',
+  baseball:   'stab-bg--baseball',
+  hockey:     'stab-bg--hockey',
+};
+
+const tabs: (Sport | 'all')[] = ['all', ...sports];
+---
+
+<div class="sport-tabs" role="tablist" aria-label="Filtrar por deporte" id="sportTabs">
+  {tabs.map(sport => (
+    <button
+      class:list={['stab', sport === active && 'stab--active']}
+      data-sport={sport}
+      role="tab"
+      aria-selected={sport === active ? 'true' : 'false'}
+      aria-label={`Mostrar torneos de ${LABELS[sport]}`}
+    >
+      <div class="stab__img">
+        <div class:list={['stab__bg', BG_CLASS[sport]]}>
+          <SportIcon sport={sport} size={22} />
+        </div>
+      </div>
+      <span class="stab__label">{LABELS[sport]}</span>
+    </button>
+  ))}
+</div>
+
+<style>
+.sport-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 24px;
+  overflow-x: auto;
+  margin-bottom: 20px;
+  scrollbar-width: none;
+}
+.sport-tabs::-webkit-scrollbar { display: none; }
+
+/* Tab button */
+.stab {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--transition);
+}
+.stab:hover { transform: translateY(-2px); }
+
+/* Image container */
+.stab__img {
+  width: 72px;
+  height: 50px;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+.stab--active .stab__img {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.stab__bg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sport backgrounds */
+.stab-bg--all        { background: #1c1c20; }
+.stab-bg--football   { background: linear-gradient(135deg, #0a1e12, #1a4d2e); }
+.stab-bg--basketball { background: linear-gradient(135deg, #1e120a, #4d2e0a); }
+.stab-bg--tennis     { background: linear-gradient(135deg, #141e08, #2e4d0a); }
+.stab-bg--volleyball { background: linear-gradient(135deg, #08122b, #0a2e4d); }
+.stab-bg--baseball   { background: linear-gradient(135deg, #1e0a12, #4d0a2e); }
+.stab-bg--hockey     { background: linear-gradient(135deg, #0e0a1e, #1a0a4d); }
+
+/* Label */
+.stab__label {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  transition: color var(--transition);
+}
+.stab--active .stab__label { color: var(--accent); }
+</style>
+
+<script>
+  (function () {
+    const tabs = document.querySelectorAll<HTMLButtonElement>('#sportTabs .stab');
+    const rows = document.querySelectorAll<HTMLElement>('.t-row');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Update tab state
+        tabs.forEach(t => {
+          t.classList.remove('stab--active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        tab.classList.add('stab--active');
+        tab.setAttribute('aria-selected', 'true');
+
+        // Filter rows
+        const sport = tab.dataset.sport;
+        rows.forEach(row => {
+          const show = sport === 'all' || row.dataset.sport === sport;
+          row.style.display = show ? 'block' : 'none';
+        });
+      });
+    });
+  })();
+</script>
