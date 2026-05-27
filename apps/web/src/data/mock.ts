@@ -258,6 +258,11 @@ export interface TournamentDetail extends TournamentWithMatches {
   description?: string;
   standings?: StandingsRow[];
   groups?: MatchGroup[];
+  /**
+   * Estadísticas de jugadores organizadas por tab.
+   * El orden del array define el orden de los tabs.
+   * Si está vacío o undefined, la sección no se renderiza.
+   */
   playerStats?: StatConfig[];
   brandColor?: string;
   logoUrl?: string;
@@ -326,4 +331,87 @@ export function getMockTournamentBySlug(slug: string): TournamentDetail | null {
   const found = MOCK_TOURNAMENTS.find(t => t.slug === slug);
   if (!found) return null;
   return { ...found, groups: [{ label: 'Partidos', matches: found.matches }] };
+}
+
+// ── Match detail ──────────────────────────────────────────
+
+export type EventType =
+  | 'goal' | 'yellow_card' | 'red_card' | 'foul'
+  | 'substitution' | 'period_start' | 'period_end'
+  | 'timeout' | 'score_update' | 'custom';
+
+export interface MatchEvent {
+  id: string;
+  type: EventType;
+  clock: string;
+  teamId?: string;
+  playerName?: string;
+  description?: string;
+  timestamp: string;
+}
+
+export interface MatchDetail {
+  id: string;
+  tournamentId: string;
+  tournamentName: string;
+  tournamentSlug: string;
+  sport: Sport;
+  homeTeam: TeamSnippet;
+  awayTeam: TeamSnippet;
+  homeScore: number;
+  awayScore: number;
+  status: MatchStatus;
+  clock?: string;
+  period?: string;
+  venue?: string;
+  scheduledAt?: string;
+  streamKey?: string;
+  hlsUrl?: string;
+  viewerCount?: number;
+  events: MatchEvent[];
+}
+
+export const MOCK_MATCH_DETAIL: MatchDetail = {
+  id: 'm1',
+  tournamentId: 't1',
+  tournamentName: 'Liga BetPlay Dimayor',
+  tournamentSlug: 'liga-betplay-2025',
+  sport: 'football',
+  homeTeam: { id: 'med', name: 'Independiente Medellín', shortName: 'MED' },
+  awayTeam: { id: 'mil', name: 'Millonarios FC',          shortName: 'MIL' },
+  homeScore: 2, awayScore: 1,
+  status: 'LIVE',
+  clock: "67'",
+  period: '2do Tiempo',
+  venue: 'Estadio El Campín, Bogotá',
+  streamKey: 'live-m1',
+  hlsUrl: undefined,   // sin stream real por ahora
+  viewerCount: 4200,
+  events: [
+    { id: 'e1', type: 'period_start', clock: "0'",  description: 'Inicio del partido', timestamp: new Date(Date.now() - 67*60000).toISOString() },
+    { id: 'e2', type: 'goal',         clock: "12'", teamId: 'med', playerName: 'Rodrigo Ureña',   description: 'Gol — cabezazo al segundo palo', timestamp: new Date(Date.now() - 55*60000).toISOString() },
+    { id: 'e3', type: 'yellow_card',  clock: "28'", teamId: 'mil', playerName: 'David Mackalister', description: 'Tarjeta amarilla', timestamp: new Date(Date.now() - 39*60000).toISOString() },
+    { id: 'e4', type: 'period_end',   clock: "45'", description: 'Fin del 1er Tiempo',  timestamp: new Date(Date.now() - 30*60000).toISOString() },
+    { id: 'e5', type: 'period_start', clock: "45'", description: 'Inicio 2do Tiempo',   timestamp: new Date(Date.now() - 22*60000).toISOString() },
+    { id: 'e6', type: 'goal',         clock: "52'", teamId: 'mil', playerName: 'Leonardo Castro', description: 'Gol — tiro libre al ángulo', timestamp: new Date(Date.now() - 15*60000).toISOString() },
+    { id: 'e7', type: 'substitution', clock: "58'", teamId: 'med', playerName: 'Ureña → Palacios', description: 'Cambio Medellín', timestamp: new Date(Date.now() - 9*60000).toISOString() },
+    { id: 'e8', type: 'goal',         clock: "63'", teamId: 'med', playerName: 'Javier Reina',    description: 'Gol — derechazo cruzado', timestamp: new Date(Date.now() - 4*60000).toISOString() },
+    { id: 'e9', type: 'foul',         clock: "66'", teamId: 'mil', playerName: 'Ruiz',            description: 'Falta peligrosa', timestamp: new Date(Date.now() - 60000).toISOString() },
+  ],
+};
+
+export function getMockMatchById(id: string): MatchDetail | null {
+  if (id === 'm1') return MOCK_MATCH_DETAIL;
+  // Buscar en torneos para partidos sin detalle completo
+  const allMatches = MOCK_TOURNAMENTS.flatMap(t =>
+    t.matches.map(m => ({
+      ...m,
+      tournamentId: t.id,
+      tournamentName: t.name,
+      tournamentSlug: t.slug,
+      sport: t.sport,
+      events: [] as MatchEvent[],
+    } as MatchDetail))
+  );
+  return allMatches.find(m => m.id === id) ?? null;
 }

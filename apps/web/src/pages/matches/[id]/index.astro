@@ -1,0 +1,337 @@
+---
+/**
+ * pages/matches/[id]/index.astro — página del partido.
+ *
+ * Arquitectura de hidratación:
+ *   Shell (equipos, header, layout)  → SSR Astro, HTML estático
+ *   LiveScoreboard                   → React island, client:load
+ *   VideoPlayer                      → React island, client:load
+ *   EventFeed                        → React island, client:load
+ *
+ * Los islands reciben el estado inicial del servidor y abren
+ * WebSocket solo si status === 'LIVE'. Si está FINISHED muestran
+ * datos históricos sin ninguna conexión persistente.
+ *
+ * Para conectar datos reales:
+ *   import { getMatch } from '../../../lib/api';
+ *   const match = await getMatch(id!, Astro.request);
+ */
+
+import Base from '../../../layouts/Base.astro';
+import LiveScoreboard from '../../../components/match/LiveScoreboard';
+import VideoPlayer    from '../../../components/match/VideoPlayer';
+import EventFeed      from '../../../components/match/EventFeed';
+import SportIcon      from '../../../components/ui/SportIcon.astro';
+import { getMockMatchById } from '../../../data/mock';
+import { ENDPOINTS } from '@parches/config';
+
+const { id } = Astro.params;
+const match = getMockMatchById(id!);
+
+if (!match) return Astro.redirect('/404');
+
+const {
+  homeTeam, awayTeam, homeScore, awayScore,
+  status, clock, period, venue, tournamentName,
+  tournamentSlug, sport, hlsUrl, streamKey,
+  viewerCount, events,
+} = match;
+
+const isLive     = status === 'LIVE';
+const isFinished = status === 'FINISHED';
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
+  volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
+};
+
+const wsUrl = ENDPOINTS.STREAMING_DATA_WS;
+
+const pageTitle = `${homeTeam.shortName} vs ${awayTeam.shortName} | Parches`;
+const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} · ${tournamentName}`;
+---
+
+<Base title={pageTitle} description={pageDesc}>
+
+  <!-- Match header -->
+  <div class="match-header">
+    <div class="match-header__grid" aria-hidden="true"></div>
+    <div class="match-header__fade" aria-hidden="true"></div>
+
+    <div class="match-header__content">
+      <!-- Breadcrumb -->
+      <nav class="match-breadcrumb" aria-label="Migas de pan">
+        <a href="/">Inicio</a>
+        <span aria-hidden="true">›</span>
+        <a href={`/tournaments/${tournamentSlug}`}>{tournamentName}</a>
+        <span aria-hidden="true">›</span>
+        <span aria-current="page">{homeTeam.shortName} vs {awayTeam.shortName}</span>
+      </nav>
+
+      <!-- Sport + venue meta -->
+      <div class="match-meta">
+        <span class="match-meta__sport">
+          <SportIcon sport={sport} size={12} stroke="var(--accent)" />
+          {sportLabel[sport]}
+        </span>
+        {venue && <span class="match-meta__venue">{venue}</span>}
+      </div>
+
+      <!-- Live scoreboard React island -->
+      <LiveScoreboard
+        client:load
+        matchId={id!}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        initialHomeScore={homeScore}
+        initialAwayScore={awayScore}
+        initialClock={clock ?? '−'}
+        initialPeriod={period ?? ''}
+        status={status}
+        wsUrl={wsUrl}
+        viewerCount={viewerCount}
+      />
+    </div>
+  </div>
+
+  <!-- Main content: video + events -->
+  <main class="match-main">
+    <div class="match-layout">
+
+      <!-- Left: Video player -->
+      <div class="match-video">
+        <VideoPlayer
+          client:load
+          hlsUrl={hlsUrl}
+          matchStatus={status}
+          homeTeam={homeTeam.name}
+          awayTeam={awayTeam.name}
+          streamKey={streamKey}
+        />
+
+        <!-- Match info card (below video) -->
+        <div class="match-info-card">
+          <div class="match-info-card__row">
+            <span class="match-info-card__label">Torneo</span>
+            <a href={`/tournaments/${tournamentSlug}`} class="match-info-card__value match-info-card__link">
+              {tournamentName}
+            </a>
+          </div>
+          {period && (
+            <div class="match-info-card__row">
+              <span class="match-info-card__label">Tiempo</span>
+              <span class="match-info-card__value">{period}</span>
+            </div>
+          )}
+          {venue && (
+            <div class="match-info-card__row">
+              <span class="match-info-card__label">Estadio</span>
+              <span class="match-info-card__value">{venue}</span>
+            </div>
+          )}
+          <div class="match-info-card__row">
+            <span class="match-info-card__label">Estado</span>
+            <span class:list={[
+              'match-info-card__value',
+              isLive     && 'match-info-card__value--live',
+              isFinished && 'match-info-card__value--fin',
+            ]}>
+              {isLive ? '● En vivo' : isFinished ? 'Finalizado' : 'Programado'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Event feed -->
+      <aside class="match-feed" aria-label="Feed de eventos">
+        <EventFeed
+          client:load
+          matchId={id!}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          initialEvents={events}
+          status={status}
+          wsUrl={wsUrl}
+        />
+      </aside>
+
+    </div>
+  </main>
+
+</Base>
+
+<style>
+/* ── Match header ────────────────────────────────────────── */
+.match-header {
+  position: relative;
+  background: linear-gradient(180deg, #111418 0%, #0a0c0f 100%);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.match-header__grid {
+  position: absolute; inset: 0;
+  opacity: 0.025;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.8) 39px,rgba(255,255,255,.8) 40px),
+    repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.8) 39px,rgba(255,255,255,.8) 40px);
+  pointer-events: none;
+}
+.match-header__fade {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,229,255,0.05) 0%, transparent 65%);
+  pointer-events: none;
+}
+.match-header__content {
+  position: relative;
+  z-index: 2;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 18px 28px 0;
+}
+
+/* Breadcrumb */
+.match-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.match-breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.match-breadcrumb a:hover { color: var(--text-primary); }
+.match-breadcrumb [aria-current] { color: var(--text-primary); }
+
+/* Sport + venue meta */
+.match-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.match-meta__sport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid rgba(0,229,255,.25);
+  border-radius: 3px;
+  background: rgba(0,229,255,.07);
+}
+.match-meta__venue {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ── Main layout ─────────────────────────────────────────── */
+.match-main {
+  flex: 1;
+  padding-bottom: 60px;
+}
+.match-layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: auto;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Video column */
+.match-video {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Event feed column */
+.match-feed {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: sticky;
+  top: 72px;
+}
+
+/* Match info card */
+.match-info-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.match-info-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.match-info-card__row:last-child { border-bottom: none; }
+.match-info-card__label {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.match-info-card__value {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.match-info-card__link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.match-info-card__link:hover { opacity: 0.8; }
+.match-info-card__value--live   { color: var(--live); }
+.match-info-card__value--fin    { color: var(--text-muted); }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .match-layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .match-feed {
+    position: static;
+    height: 380px;
+  }
+}
+@media (max-width: 600px) {
+  .match-header__content { padding: 14px 16px 0; }
+  .match-layout { padding: 12px; gap: 12px; }
+}
+</style>
