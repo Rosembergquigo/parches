@@ -18,10 +18,11 @@
  */
 
 import Base from '../../../layouts/Base.astro';
-import LiveScoreboard from '../../../components/match/LiveScoreboard';
-import VideoPlayer    from '../../../components/match/VideoPlayer';
-import EventFeed      from '../../../components/match/EventFeed';
-import SportIcon      from '../../../components/ui/SportIcon.astro';
+import LiveScoreboard  from '../../../components/match/LiveScoreboard';
+import VideoPlayer     from '../../../components/match/VideoPlayer';
+import EventFeed       from '../../../components/match/EventFeed';
+import MatchStatsPanel from '../../../components/match/MatchStatsPanel';
+import SportIcon       from '../../../components/ui/SportIcon.astro';
 import { getMockMatchById } from '../../../data/mock';
 import { ENDPOINTS } from '@parches/config';
 
@@ -34,7 +35,7 @@ const {
   homeTeam, awayTeam, homeScore, awayScore,
   status, clock, period, venue, tournamentName,
   tournamentSlug, sport, hlsUrl, streamKey,
-  viewerCount, events,
+  viewerCount, events, stats,
 } = match;
 
 const isLive     = status === 'LIVE';
@@ -142,17 +143,72 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
         </div>
       </div>
 
-      <!-- Right: Event feed -->
-      <aside class="match-feed" aria-label="Feed de eventos">
-        <EventFeed
-          client:load
-          matchId={id!}
-          homeTeam={homeTeam}
-          awayTeam={awayTeam}
-          initialEvents={events}
-          status={status}
-          wsUrl={wsUrl}
-        />
+      <!-- Right: Tabbed panel (Cronología | Estadísticas) -->
+      <aside class="match-panel" aria-label="Información del partido">
+
+        <!-- Tab nav -->
+        <div class="mp-tabs" role="tablist" aria-label="Secciones del partido">
+          <button
+            class="mp-tab mp-tab--active"
+            role="tab"
+            aria-selected="true"
+            aria-controls="panel-cronologia"
+            id="tab-cronologia"
+            data-panel="panel-cronologia"
+          >
+            Cronología
+          </button>
+          {stats && stats.length > 0 && (
+            <button
+              class="mp-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-estadisticas"
+              id="tab-estadisticas"
+              data-panel="panel-estadisticas"
+            >
+              Estadísticas
+            </button>
+          )}
+        </div>
+
+        <!-- Panel: Cronología -->
+        <div
+          class="mp-panel"
+          id="panel-cronologia"
+          role="tabpanel"
+          aria-labelledby="tab-cronologia"
+          tabindex="0"
+        >
+          <EventFeed
+            client:load
+            matchId={id!}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            initialEvents={events}
+            status={status}
+            wsUrl={wsUrl}
+          />
+        </div>
+
+        <!-- Panel: Estadísticas -->
+        {stats && stats.length > 0 && (
+          <div
+            class="mp-panel mp-panel--hidden"
+            id="panel-estadisticas"
+            role="tabpanel"
+            aria-labelledby="tab-estadisticas"
+            tabindex="0"
+          >
+            <MatchStatsPanel
+              client:load
+              rows={stats}
+              homeTeam={homeTeam.name}
+              awayTeam={awayTeam.name}
+            />
+          </div>
+        )}
+
       </aside>
 
     </div>
@@ -264,18 +320,57 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
   gap: 14px;
 }
 
-/* Event feed column */
-.match-feed {
+/* Event feed / stats panel */
+.match-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  height: 520px;
+  height: 560px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: sticky;
   top: 72px;
 }
+
+/* Tab nav */
+.mp-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mp-tab {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 12px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+}
+.mp-tab:hover:not(.mp-tab--active) {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+.mp-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Panels */
+.mp-panel {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mp-panel--hidden { display: none; }
 
 /* Match info card */
 .match-info-card {
@@ -335,3 +430,28 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
   .match-layout { padding: 12px; gap: 12px; }
 }
 </style>
+
+<script>
+  (function () {
+    const tabs   = document.querySelectorAll<HTMLButtonElement>('.mp-tab');
+    const panels = document.querySelectorAll<HTMLElement>('.mp-panel');
+    if (!tabs.length) return;
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Deactivate all
+        tabs.forEach(t => {
+          t.classList.remove('mp-tab--active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        panels.forEach(p => p.classList.add('mp-panel--hidden'));
+
+        // Activate clicked
+        tab.classList.add('mp-tab--active');
+        tab.setAttribute('aria-selected', 'true');
+        const panelId = tab.dataset.panel!;
+        document.getElementById(panelId)?.classList.remove('mp-panel--hidden');
+      });
+    });
+  })();
+</script>

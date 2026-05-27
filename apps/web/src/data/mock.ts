@@ -369,6 +369,7 @@ export interface MatchDetail {
   hlsUrl?: string;
   viewerCount?: number;
   events: MatchEvent[];
+  stats?: MatchStatRow[];   // se agrega después del type MatchStatRow
 }
 
 export const MOCK_MATCH_DETAIL: MatchDetail = {
@@ -415,3 +416,83 @@ export function getMockMatchById(id: string): MatchDetail | null {
   );
   return allMatches.find(m => m.id === id) ?? null;
 }
+
+// ── Match stats (por partido, no por torneo) ──────────────
+
+export interface MatchStatRow {
+  label: string;          // "Remates", "Posesión", "Aces"
+  home: number;
+  away: number;
+  isPercentage?: boolean; // true → muestra "73%" en vez de "73"
+  higherIsBetter?: boolean; // false para faltas, tarjetas
+}
+
+export interface MatchStatsConfig {
+  sport: Sport;
+  rows: MatchStatRow[];
+}
+
+// Stats por deporte — genérico, extensible
+export const MATCH_STATS_BY_SPORT: Record<Sport, (home: string, away: string) => MatchStatRow[]> = {
+  football: () => [
+    { label: 'Remates',                home: 15, away: 5,   higherIsBetter: true  },
+    { label: 'Remates al arco',        home: 7,  away: 4,   higherIsBetter: true  },
+    { label: 'Posesión',               home: 73, away: 27,  isPercentage: true, higherIsBetter: true },
+    { label: 'Pases',                  home: 450,away: 179, higherIsBetter: true  },
+    { label: 'Precisión de pases',     home: 87, away: 60,  isPercentage: true, higherIsBetter: true },
+    { label: 'Faltas',                 home: 9,  away: 13,  higherIsBetter: false },
+    { label: 'Tarjetas amarillas',     home: 3,  away: 5,   higherIsBetter: false },
+    { label: 'Tarjetas rojas',         home: 0,  away: 0,   higherIsBetter: false },
+    { label: 'Posición adelantada',    home: 2,  away: 1,   higherIsBetter: false },
+    { label: 'Tiros de esquina',       home: 7,  away: 4,   higherIsBetter: true  },
+  ],
+  basketball: () => [
+    { label: 'Puntos en pintura',      home: 34, away: 22,  higherIsBetter: true  },
+    { label: 'Rebotes totales',        home: 42, away: 35,  higherIsBetter: true  },
+    { label: 'Rebotes ofensivos',      home: 12, away: 8,   higherIsBetter: true  },
+    { label: 'Asistencias',            home: 18, away: 14,  higherIsBetter: true  },
+    { label: 'Robos',                  home: 7,  away: 5,   higherIsBetter: true  },
+    { label: 'Bloqueos',               home: 4,  away: 3,   higherIsBetter: true  },
+    { label: 'Pérdidas de balón',      home: 11, away: 14,  higherIsBetter: false },
+    { label: 'Tiros de campo %',       home: 48, away: 42,  isPercentage: true, higherIsBetter: true },
+    { label: 'Triples %',              home: 36, away: 31,  isPercentage: true, higherIsBetter: true },
+    { label: 'Tiros libres %',         home: 78, away: 72,  isPercentage: true, higherIsBetter: true },
+  ],
+  tennis: () => [
+    { label: 'Aces',                   home: 8,  away: 4,   higherIsBetter: true  },
+    { label: 'Dobles faltas',          home: 2,  away: 5,   higherIsBetter: false },
+    { label: '1er servicio %',         home: 68, away: 61,  isPercentage: true, higherIsBetter: true },
+    { label: 'Puntos con 1er servicio',home: 74, away: 65,  isPercentage: true, higherIsBetter: true },
+    { label: 'Puntos con 2do servicio',home: 52, away: 44,  isPercentage: true, higherIsBetter: true },
+    { label: 'Puntos de quiebre ganados', home: 4, away: 2, higherIsBetter: true  },
+    { label: 'Winners',                home: 32, away: 24,  higherIsBetter: true  },
+    { label: 'Errores no forzados',    home: 18, away: 26,  higherIsBetter: false },
+  ],
+  volleyball: () => [
+    { label: 'Aces de servicio',       home: 6,  away: 3,   higherIsBetter: true  },
+    { label: 'Errores de servicio',    home: 4,  away: 7,   higherIsBetter: false },
+    { label: 'Bloqueos',               home: 9,  away: 6,   higherIsBetter: true  },
+    { label: 'Ataques exitosos',       home: 42, away: 35,  higherIsBetter: true  },
+    { label: 'Eficiencia de ataque',   home: 58, away: 47,  isPercentage: true, higherIsBetter: true },
+    { label: 'Errores de recepción',   home: 5,  away: 8,   higherIsBetter: false },
+  ],
+  baseball: () => [
+    { label: 'Hits',                   home: 9,  away: 7,   higherIsBetter: true  },
+    { label: 'Carreras',               home: 4,  away: 3,   higherIsBetter: true  },
+    { label: 'Errores',                home: 1,  away: 2,   higherIsBetter: false },
+    { label: 'Ponches lanzador',       home: 8,  away: 6,   higherIsBetter: true  },
+    { label: 'Bases por bolas',        home: 3,  away: 4,   higherIsBetter: false },
+    { label: 'Promedio de bateo',      home: 28, away: 24,  isPercentage: true, higherIsBetter: true },
+  ],
+  hockey: () => [
+    { label: 'Tiros al arco',          home: 32, away: 24,  higherIsBetter: true  },
+    { label: 'Bloqueos',               home: 14, away: 18,  higherIsBetter: true  },
+    { label: 'Golpes',                 home: 22, away: 28,  higherIsBetter: false },
+    { label: 'Power plays',            home: 3,  away: 2,   higherIsBetter: true  },
+    { label: 'Goles en power play',    home: 1,  away: 0,   higherIsBetter: true  },
+    { label: '% paradas portero',      home: 92, away: 87,  isPercentage: true, higherIsBetter: true },
+  ],
+};
+
+// Agregar stats al mock del partido m1
+MOCK_MATCH_DETAIL.stats = MATCH_STATS_BY_SPORT.football();
