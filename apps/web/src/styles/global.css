@@ -2,8 +2,8 @@
 
 /* ── Design tokens ─────────────────────────────────────────── */
 :root {
-  --font-display: 'Barlow Condensed', sans-serif;
-  --font-body:    'Barlow', sans-serif;
+  --font-display: Helvetica,'Barlow Condensed', sans-serif;
+  --font-body:    Helvetica, 'Barlow', sans-serif;
 
   --bg-base:      #0a0c0f;
   --bg-surface:   #111418;

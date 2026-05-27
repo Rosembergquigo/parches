@@ -1,0 +1,389 @@
+---
+/**
+ * PlayerStatsTable.astro — tabla de estadísticas de jugadores con tabs.
+ *
+ * Genérico por diseño: recibe un array de StatConfig, cada uno define
+ * su propio tab, columna principal y filas. El deporte decide qué tabs
+ * existen — el componente no sabe nada de fútbol ni de basket.
+ *
+ * Fútbol:      Goleadores | Valla menos vencida
+ * Baloncesto:  Anotadores | Reboteadores | Asistentes   (a futuro)
+ * Tenis:       Aces | Doble faltas                       (a futuro)
+ *
+ * Los tabs funcionan con JS vanilla inline — sin React, sin libs.
+ * El primer tab está activo por defecto desde el servidor.
+ *
+ * Recibe brandColor opcional para teñir el tab activo con el
+ * color de marca del torneo en vez del cyan por defecto.
+ */
+import type { StatConfig } from '../../data/mock';
+
+interface Props {
+  stats: StatConfig[];
+  brandColor?: string;
+}
+
+const { stats, brandColor } = Astro.props;
+if (!stats || stats.length === 0) return;
+
+// Color activo: brandColor si existe, sino cyan del sistema
+const activeColor = brandColor ?? 'var(--accent)';
+const activeBg    = brandColor ? `${brandColor}14` : 'var(--accent-dim)';
+const activeBorder= brandColor ? `${brandColor}44` : 'rgba(0,229,255,0.3)';
+
+// ID único por instancia para los aria attrs (por si hay múltiples en página)
+const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
+---
+
+<div class="pst" id={uid}>
+  <h2 class="pst__title">Estadísticas</h2>
+
+  <!-- Tabs -->
+  <div class="pst__tabs" role="tablist" aria-label="Estadísticas de jugadores">
+    {stats.map((cfg, i) => (
+      <button
+        class:list={['pst__tab', i === 0 && 'pst__tab--active']}
+        role="tab"
+        aria-selected={i === 0 ? 'true' : 'false'}
+        aria-controls={`${uid}-panel-${cfg.id}`}
+        id={`${uid}-tab-${cfg.id}`}
+        data-panel={`${uid}-panel-${cfg.id}`}
+        style={i === 0
+          ? `color:${activeColor}; background:${activeBg}; border-color:${activeBorder};`
+          : ''}
+      >
+        {cfg.tabLabel}
+      </button>
+    ))}
+  </div>
+
+  <!-- Panels -->
+  {stats.map((cfg, i) => (
+    <div
+      class:list={['pst__panel', i !== 0 && 'pst__panel--hidden']}
+      role="tabpanel"
+      id={`${uid}-panel-${cfg.id}`}
+      aria-labelledby={`${uid}-tab-${cfg.id}`}
+      tabindex="0"
+    >
+      <div class="pst__table-wrap">
+        <table class="pst__table" aria-label={cfg.tabLabel}>
+          <thead>
+            <tr>
+              <th class="col-pos" scope="col">#</th>
+              <th class="col-player" scope="col">Jugador</th>
+              <th class="col-team" scope="col">Equipo</th>
+              <th class="col-stat" scope="col">{cfg.colHeader}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cfg.rows.map(row => (
+              <tr class="pst__row">
+                <!-- Position -->
+                <td class="col-pos">
+                  <span
+                    class:list={['pos-num', row.position <= 3 && 'pos-num--top']}
+                    style={row.position <= 3 ? `color: ${activeColor};` : ''}
+                  >
+                    {row.position}
+                  </span>
+                </td>
+
+                <!-- Player -->
+                <td class="col-player">
+                  <div class="player-cell">
+                    <div
+                      class="player-avatar"
+                      aria-hidden="true"
+                      style={row.position <= 3
+                        ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
+                        : ''}
+                    >
+                      {row.playerShortName}
+                    </div>
+                    <div class="player-info">
+                      <span class="player-name">{row.playerName}</span>
+                      {row.statLabel && (
+                        <span class="player-sublabel">{row.statLabel}</span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Team -->
+                <td class="col-team">
+                  <div class="team-cell">
+                    <div class="team-logo-sm" aria-hidden="true">
+                      {row.team.shortName}
+                    </div>
+                    <span class="team-name-sm">{row.team.name.split(' ')[0]}</span>
+                  </div>
+                </td>
+
+                <!-- Stat value — the main number -->
+                <td class="col-stat">
+                  <span
+                    class="stat-value"
+                    style={row.position === 1 ? `color: ${activeColor};` : ''}
+                  >
+                    {row.statValue}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  ))}
+</div>
+
+<style>
+.pst {
+  padding: 0 24px;
+  margin-bottom: 40px;
+}
+.pst__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+.pst__tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.pst__tab {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+.pst__tab:hover:not(.pst__tab--active) {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+  border-color: var(--border-hover);
+}
+/* Active state applied via inline style (brandColor aware) */
+.pst__tab--active {
+  /* fallback if JS hasn't run yet */
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(0,229,255,0.3);
+}
+
+/* ── Panel ──────────────────────────────────────────────── */
+.pst__panel { display: block; }
+.pst__panel--hidden { display: none; }
+
+/* Scroll wrapper */
+.pst__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.pst__table-wrap::-webkit-scrollbar { height: 3px; }
+.pst__table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.pst__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+thead tr {
+  border-bottom: 1px solid var(--border);
+}
+thead th {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+thead .col-player,
+thead .col-team { text-align: left; }
+thead .col-pos,
+thead .col-stat  { text-align: center; }
+
+.pst__row {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.pst__row:last-child { border-bottom: none; }
+.pst__row:hover { background: var(--bg-raised); }
+
+/* ── Columns ────────────────────────────────────────────── */
+.col-pos {
+  width: 40px;
+  text-align: center;
+  padding: 10px 8px;
+}
+.col-player {
+  padding: 10px 12px;
+}
+.col-team {
+  padding: 10px 12px;
+}
+.col-stat {
+  width: 60px;
+  text-align: center;
+  padding: 10px 12px;
+}
+
+/* Position number */
+.pos-num {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+/* .pos-num--top color applied via inline style */
+
+/* Player cell */
+.player-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.player-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  flex-shrink: 0;
+}
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.player-name {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.player-sublabel {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Team cell */
+.team-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.team-logo-sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.45rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+.team-name-sm {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Stat value */
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  /* color del líder aplicado via inline style */
+}
+</style>
+
+<script>
+  // Tab switching — vanilla, sin deps
+  document.querySelectorAll<HTMLElement>('.pst').forEach(widget => {
+    const tabs   = widget.querySelectorAll<HTMLButtonElement>('.pst__tab');
+    const panels = widget.querySelectorAll<HTMLElement>('.pst__panel');
+
+    // Leer el color activo desde el primer tab (ya está seteado por el servidor)
+    const firstTab   = tabs[0];
+    const activeColor  = firstTab?.style.color ?? 'var(--accent)';
+    const activeBg     = firstTab?.style.background ?? 'var(--accent-dim)';
+    const activeBorder = firstTab?.style.borderColor ?? 'rgba(0,229,255,0.3)';
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Deactivate all
+        tabs.forEach(t => {
+          t.classList.remove('pst__tab--active');
+          t.setAttribute('aria-selected', 'false');
+          t.style.color = '';
+          t.style.background = '';
+          t.style.borderColor = '';
+        });
+        panels.forEach(p => p.classList.add('pst__panel--hidden'));
+
+        // Activate clicked
+        tab.classList.add('pst__tab--active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.style.color = activeColor;
+        tab.style.background = activeBg;
+        tab.style.borderColor = activeBorder;
+
+        const panelId = tab.dataset.panel!;
+        document.getElementById(panelId)?.classList.remove('pst__panel--hidden');
+      });
+    });
+  });
+</script>

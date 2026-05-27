@@ -202,3 +202,128 @@ export const MOCK_HERO_MATCHES: (MatchSnippet & { tournamentName: string; sport:
     )
     .sort((a, b) => (b.viewerCount ?? 0) - (a.viewerCount ?? 0))
     .slice(0, 3) as (MatchSnippet & { tournamentName: string; sport: Sport })[];
+
+// ── Tournament detail helpers ─────────────────────────────
+
+export interface StandingsRow {
+  position: number;
+  team: TeamSnippet;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
+}
+
+export interface MatchGroup {
+  label: string;          // "Jornada 18" / "Semifinales" / "Cuartos de final"
+  matches: MatchSnippet[];
+}
+
+/**
+ * Una fila de estadística de jugador.
+ * `statValue`  → el número principal del ranking (goles, puntos, etc.)
+ * `statLabel`  → texto auxiliar opcional ("4 partidos" / "87% efectividad")
+ */
+export interface PlayerStat {
+  position: number;
+  playerName: string;
+  playerShortName: string;   // iniciales para el avatar placeholder
+  team: TeamSnippet;
+  statValue: number;
+  statLabel?: string;        // texto auxiliar debajo del valor
+}
+
+/**
+ * Configuración de una tab de estadísticas.
+ * Genérica — cada deporte define sus propias tabs.
+ *
+ * Ejemplos:
+ *   Fútbol:      { id: 'scorers',  tabLabel: 'Goleadores',          colHeader: 'Goles' }
+ *                { id: 'cleansh',  tabLabel: 'Valla menos vencida',  colHeader: 'Vallas' }
+ *   Baloncesto:  { id: 'points',   tabLabel: 'Anotadores',           colHeader: 'Pts' }
+ *                { id: 'rebounds', tabLabel: 'Reboteadores',          colHeader: 'Reb' }
+ *   Tenis:       { id: 'aces',     tabLabel: 'Aces',                  colHeader: 'Aces' }
+ */
+export interface StatConfig {
+  id: string;            // identificador único del tab (usado como aria-controls)
+  tabLabel: string;      // texto del tab
+  colHeader: string;     // encabezado de la columna principal (corto: "Goles", "Pts")
+  rows: PlayerStat[];
+}
+
+export interface TournamentDetail extends TournamentWithMatches {
+  description?: string;
+  standings?: StandingsRow[];
+  groups?: MatchGroup[];
+  playerStats?: StatConfig[];
+  brandColor?: string;
+  logoUrl?: string;
+}
+
+// Detailed mock for Liga BetPlay
+export const MOCK_TOURNAMENT_BETPLAY: TournamentDetail = {
+  ...MOCK_TOURNAMENTS[0]!,
+  brandColor: '#f5a623',
+  logoUrl: undefined,
+  description: 'La primera división del fútbol profesional colombiano. 20 equipos compiten en dos fases: todos contra todos y cuadrangulares finales.',
+  playerStats: [
+    {
+      id: 'scorers',
+      tabLabel: 'Goleadores',
+      colHeader: 'Goles',
+      rows: [
+        { position: 1, playerName: 'Adrián Ramos',     playerShortName: 'AR', team: { id: 'ame', name: 'América de Cali',          shortName: 'AME' }, statValue: 12, statLabel: '17 partidos' },
+        { position: 2, playerName: 'Dayro Moreno',     playerShortName: 'DM', team: { id: 'nal', name: 'Atlético Nacional',          shortName: 'NAL' }, statValue: 11, statLabel: '16 partidos' },
+        { position: 3, playerName: 'Leonardo Castro',  playerShortName: 'LC', team: { id: 'mil', name: 'Millonarios FC',             shortName: 'MIL' }, statValue: 9,  statLabel: '17 partidos' },
+        { position: 4, playerName: 'Rodrigo Ureña',    playerShortName: 'RU', team: { id: 'med', name: 'Independiente Medellín',     shortName: 'MED' }, statValue: 8,  statLabel: '15 partidos' },
+        { position: 5, playerName: 'Wilson Morelo',    playerShortName: 'WM', team: { id: 'san', name: 'Santa Fe',                  shortName: 'SAN' }, statValue: 7,  statLabel: '17 partidos' },
+        { position: 6, playerName: 'Jhon Córdoba',     playerShortName: 'JC', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 6,  statLabel: '14 partidos' },
+        { position: 7, playerName: 'Marco Pérez',      playerShortName: 'MP', team: { id: 'cal', name: 'Deportivo Cali',            shortName: 'CAL' }, statValue: 5,  statLabel: '17 partidos' },
+        { position: 8, playerName: 'Carlos Bacca',     playerShortName: 'CB', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 5,  statLabel: '16 partidos' },
+      ],
+    },
+    {
+      id: 'cleansheets',
+      tabLabel: 'Valla menos vencida',
+      colHeader: 'Vallas',
+      rows: [
+        { position: 1, playerName: 'Aldair Quintana',  playerShortName: 'AQ', team: { id: 'nal', name: 'Atlético Nacional',          shortName: 'NAL' }, statValue: 9,  statLabel: '3 goles en contra' },
+        { position: 2, playerName: 'Álvaro Montero',   playerShortName: 'AM', team: { id: 'mil', name: 'Millonarios FC',             shortName: 'MIL' }, statValue: 8,  statLabel: '5 goles en contra' },
+        { position: 3, playerName: 'David González',   playerShortName: 'DG', team: { id: 'med', name: 'Independiente Medellín',     shortName: 'MED' }, statValue: 8,  statLabel: '6 goles en contra' },
+        { position: 4, playerName: 'Joel Graterol',    playerShortName: 'JG', team: { id: 'san', name: 'Santa Fe',                  shortName: 'SAN' }, statValue: 7,  statLabel: '7 goles en contra' },
+        { position: 5, playerName: 'Sebastián Viera',  playerShortName: 'SV', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 6,  statLabel: '9 goles en contra' },
+        { position: 6, playerName: 'Neto Volpi',       playerShortName: 'NV', team: { id: 'ame', name: 'América de Cali',          shortName: 'AME' }, statValue: 5,  statLabel: '11 goles en contra' },
+      ],
+    },
+  ],
+  standings: [
+    { position: 1, team: { id: 'nal', name: 'Atlético Nacional', shortName: 'NAL' }, played: 17, won: 11, drawn: 3, lost: 3, goalsFor: 32, goalsAgainst: 14, points: 36 },
+    { position: 2, team: { id: 'mil', name: 'Millonarios FC', shortName: 'MIL' }, played: 17, won: 10, drawn: 4, lost: 3, goalsFor: 28, goalsAgainst: 16, points: 34 },
+    { position: 3, team: { id: 'med', name: 'Independiente Medellín', shortName: 'MED' }, played: 17, won: 9, drawn: 5, lost: 3, goalsFor: 25, goalsAgainst: 13, points: 32 },
+    { position: 4, team: { id: 'san', name: 'Santa Fe', shortName: 'SAN' }, played: 17, won: 9, drawn: 3, lost: 5, goalsFor: 22, goalsAgainst: 18, points: 30 },
+    { position: 5, team: { id: 'ame', name: 'América de Cali', shortName: 'AME' }, played: 17, won: 8, drawn: 4, lost: 5, goalsFor: 24, goalsAgainst: 20, points: 28 },
+    { position: 6, team: { id: 'jun', name: 'Junior FC', shortName: 'JUN' }, played: 17, won: 7, drawn: 5, lost: 5, goalsFor: 21, goalsAgainst: 19, points: 26 },
+    { position: 7, team: { id: 'cal', name: 'Deportivo Cali', shortName: 'CAL' }, played: 17, won: 6, drawn: 4, lost: 7, goalsFor: 18, goalsAgainst: 22, points: 22 },
+    { position: 8, team: { id: 'pas', name: 'Deportivo Pasto', shortName: 'PAS' }, played: 17, won: 4, drawn: 3, lost: 10, goalsFor: 14, goalsAgainst: 28, points: 15 },
+  ],
+  groups: [
+    {
+      label: 'Jornada 18 — En curso',
+      matches: MOCK_TOURNAMENTS[0]!.matches.filter(m => m.status === 'LIVE' || m.status === 'SCHEDULED'),
+    },
+    {
+      label: 'Jornada 17 — Finalizada',
+      matches: MOCK_TOURNAMENTS[0]!.matches.filter(m => m.status === 'FINISHED'),
+    },
+  ],
+};
+
+export function getMockTournamentBySlug(slug: string): TournamentDetail | null {
+  if (slug === 'liga-betplay-2025') return MOCK_TOURNAMENT_BETPLAY;
+  const found = MOCK_TOURNAMENTS.find(t => t.slug === slug);
+  if (!found) return null;
+  return { ...found, groups: [{ label: 'Partidos', matches: found.matches }] };
+}

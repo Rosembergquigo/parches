@@ -1,0 +1,371 @@
+---
+/**
+ * TournamentHero.astro — header visual de la página de torneo.
+ *
+ * Personalización de marca:
+ *   - brandColor → tinta el gradiente del hero y el acento de la tabla
+ *   - logoUrl    → muestra la imagen del torneo; si no hay, genera
+ *                  iniciales con brandColor como fondo
+ *
+ * Ambos campos son opcionales — progressive enhancement.
+ * Sin ellos el componente usa el gradiente genérico por deporte.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { TournamentDetail } from '../../data/mock';
+
+interface Props {
+  tournament: TournamentDetail;
+}
+
+const { tournament } = Astro.props;
+const { name, sport, stage, status, teamCount, description, brandColor, logoUrl } = tournament;
+
+const liveMatches = tournament.matches.filter(m => m.status === 'LIVE').length;
+
+// ── Background gradient ─────────────────────────────────────
+// Si hay brandColor, mezcla ese color con el oscuro base.
+// Si no, usa el gradiente genérico por deporte.
+const sportGradient: Record<string, string> = {
+  football:   'linear-gradient(135deg, #0a1e12 0%, #0d2b1a 50%, #0a0c0f 100%)',
+  basketball: 'linear-gradient(135deg, #1e120a 0%, #2b1a08 50%, #0a0c0f 100%)',
+  tennis:     'linear-gradient(135deg, #141e08 0%, #1e2f0a 50%, #0a0c0f 100%)',
+  volleyball: 'linear-gradient(135deg, #08122b 0%, #0d1e40 50%, #0a0c0f 100%)',
+  baseball:   'linear-gradient(135deg, #1e0a12 0%, #2b0d1a 50%, #0a0c0f 100%)',
+  hockey:     'linear-gradient(135deg, #0e0a1e 0%, #160d2e 50%, #0a0c0f 100%)',
+};
+
+const bgGradient = brandColor
+  ? `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}11 45%, #0a0c0f 100%)`
+  : (sportGradient[sport] ?? sportGradient.football);
+
+// ── Logo / initials ─────────────────────────────────────────
+// Toma las primeras letras de cada palabra del nombre (máx 2)
+const initials = name
+  .split(' ')
+  .filter(w => w.length > 2)          // ignora "de", "la", "FC"…
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('');
+
+const logoBg   = brandColor ?? '#1e232b';
+const logoText = brandColor ? '#000' : 'rgba(255,255,255,0.7)';
+// Si el brandColor es oscuro, el texto debe ser claro — heurística rápida
+const isLight  = brandColor
+  ? parseInt(brandColor.slice(1), 16) > 0x888888
+  : false;
+const logoTextColor = brandColor && isLight ? '#000' : '#fff';
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
+  volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
+};
+---
+
+<div class="t-hero" style={`background: ${bgGradient ?? sportGradient.football}`}>
+  <!-- Grid texture -->
+  <div class="t-hero__grid" aria-hidden="true"></div>
+  <!-- Bottom fade -->
+  <div class="t-hero__fade" aria-hidden="true"></div>
+
+  <div class="t-hero__content">
+
+    <!-- Breadcrumb -->
+    <nav class="t-hero__breadcrumb" aria-label="Navegación de migas">
+      <a href="/">Inicio</a>
+      <span aria-hidden="true">›</span>
+      <a href="/tournaments">Torneos</a>
+      <span aria-hidden="true">›</span>
+      <span aria-current="page">{name}</span>
+    </nav>
+
+    <!-- Main info -->
+    <div class="t-hero__main">
+    <!-- Logo del torneo o iniciales con color de marca -->
+      {logoUrl ? (
+        <div class="t-hero__logo-wrap">
+          <img
+            src={logoUrl}
+            alt={`Logo ${name}`}
+            class="t-hero__logo-img"
+            width="56"
+            height="56"
+            loading="eager"
+          />
+        </div>
+      ) : (
+        <div
+          class="t-hero__logo-initials"
+          style={`background: ${logoBg}33; border-color: ${logoBg}55;`}
+          aria-hidden="true"
+        >
+          <span style={`color: ${logoTextColor};`}>{initials}</span>
+        </div>
+      )}
+
+      <div class="t-hero__info">
+        <!-- Badges row -->
+        <div class="t-hero__badges">
+          <span
+            class="t-hero__sport-badge"
+            style={brandColor
+              ? `color:${brandColor}; border-color:${brandColor}44; background:${brandColor}14;`
+              : ''}
+          >{sportLabel[sport]}</span>
+          {stage && <span class="t-hero__stage">{stage}</span>}
+          {status === 'LIVE' && liveMatches > 0 && (
+            <span class="t-hero__live">
+              <span class="t-hero__live-dot" aria-hidden="true"></span>
+              {liveMatches} en vivo
+            </span>
+          )}
+          {status === 'UPCOMING' && (
+            <span class="t-hero__upcoming">Próximamente</span>
+          )}
+          {status === 'FINISHED' && (
+            <span class="t-hero__finished">Finalizado</span>
+          )}
+        </div>
+
+        <!-- Tournament name -->
+        <h1 class="t-hero__name">{name}</h1>
+
+        <!-- Description + team count -->
+        <div class="t-hero__meta-row">
+          {teamCount && (
+            <span class="t-hero__teams-count">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              {teamCount} equipos
+            </span>
+          )}
+          {description && (
+            <p class="t-hero__description">{description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.t-hero {
+  position: relative;
+  min-height: 200px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.t-hero__grid {
+  position: absolute; inset: 0;
+  opacity: 0.03;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px);
+  pointer-events: none;
+}
+.t-hero__fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(10,12,15,0.95) 0%, transparent 60%);
+  pointer-events: none;
+}
+.t-hero__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 28px 28px;
+}
+
+/* Breadcrumb */
+.t-hero__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.t-hero__breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.t-hero__breadcrumb a:hover { color: var(--text-primary); }
+.t-hero__breadcrumb [aria-current] { color: var(--text-primary); }
+
+/* Main layout */
+.t-hero__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+/* Sport icon box — kept for fallback */
+.t-hero__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Brand logo — imagen real */
+.t-hero__logo-wrap {
+  flex-shrink: 0;
+}
+.t-hero__logo-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+/* Brand logo — iniciales generadas */
+.t-hero__logo-initials {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.t-hero__logo-initials span {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.t-hero__info { flex: 1; }
+
+/* Badges */
+.t-hero__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.t-hero__sport-badge {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid rgba(0,229,255,.3);
+  border-radius: 3px;
+  background: rgba(0,229,255,.08);
+}
+.t-hero__stage {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.t-hero__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--live);
+  padding: 2px 8px;
+  border: 1px solid var(--live);
+  border-radius: 3px;
+  background: var(--live-dim);
+}
+.t-hero__live-dot {
+  width: 5px; height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+}
+.t-hero__upcoming {
+  font-family: var(--font-display);
+  font-size: 0.65rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid rgba(0,229,255,.3);
+  border-radius: 3px;
+}
+.t-hero__finished {
+  font-family: var(--font-display);
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+/* Tournament name */
+.t-hero__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+/* Meta row */
+.t-hero__meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.t-hero__teams-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.t-hero__description {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 560px;
+}
+</style>

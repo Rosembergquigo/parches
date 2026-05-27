@@ -1,0 +1,101 @@
+---
+/**
+ * MatchFixture.astro — fixture de partidos agrupados por fase.
+ *
+ * Cada grupo tiene un label ("Jornada 18", "Semifinales", etc.)
+ * y muestra sus partidos en un scroll horizontal de MatchCards,
+ * consistente con el patrón del index.
+ */
+import MatchCard from '../match/MatchCard.astro';
+import type { MatchGroup } from '../../data/mock';
+
+interface Props {
+  groups: MatchGroup[];
+}
+
+const { groups } = Astro.props;
+---
+
+<div class="fixture">
+  <h2 class="fixture__title">Fixture</h2>
+
+  {groups.map(group => (
+    <div class="fixture__group">
+      <!-- Group label -->
+      <div class="fixture__group-header">
+        <span class="fixture__group-label">{group.label}</span>
+        <div class="fixture__group-line" aria-hidden="true"></div>
+      </div>
+
+      <!-- Match cards strip — same pattern as index -->
+      <div class="fixture__strip" role="list" aria-label={group.label}>
+        {group.matches.map(match => (
+          <div role="listitem">
+            <MatchCard match={match} />
+          </div>
+        ))}
+      </div>
+    </div>
+  ))}
+</div>
+
+<style>
+.fixture {
+  padding: 0 24px;
+  margin-bottom: 40px;
+}
+.fixture__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+/* Group */
+.fixture__group {
+  margin-bottom: 28px;
+}
+.fixture__group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.fixture__group-label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.fixture__group-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Strip — same as TournamentRow */
+.fixture__strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin: 0 -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+  -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
+  mask-image: linear-gradient(to right, black 88%, transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.fixture__strip::-webkit-scrollbar { height: 2px; }
+.fixture__strip::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+</style>

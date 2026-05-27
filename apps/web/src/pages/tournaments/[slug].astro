@@ -1,0 +1,210 @@
+---
+/**
+ * pages/tournaments/[slug].astro — página de torneo.
+ *
+ * SSR puro. Renderiza con datos del torneo identificado por slug.
+ * 404 si el slug no existe.
+ *
+ * Estructura:
+ *   TournamentHero    — header con nombre, deporte, estado
+ *   [en vivo]         — live strip si hay partidos activos
+ *   StandingsTable    — tabla de posiciones (si hay standings)
+ *   MatchFixture      — fixture agrupado por fase
+ *
+ * Para conectar el API real, reemplaza getMockTournamentBySlug por:
+ *   import { getTournament } from '../../lib/api';
+ *   const tournament = await getTournament(slug, Astro.request);
+ */
+import Base from '../../layouts/Base.astro';
+import TournamentHero from '../../components/tournament/TournamentHero.astro';
+import StandingsTable from '../../components/tournament/StandingsTable.astro';
+import MatchFixture from '../../components/tournament/MatchFixture.astro';
+import LiveStrip from '../../components/match/LiveStrip.astro';
+import PlayerStatsTable from '../../components/tournament/PlayerStatsTable.astro';
+import { getMockTournamentBySlug } from '../../data/mock';
+
+const { slug } = Astro.params;
+
+const tournament = getMockTournamentBySlug(slug!);
+if (!tournament) return Astro.redirect('/404');
+
+const liveNow = tournament.matches
+  .filter(m => m.status === 'LIVE')
+  .map(m => ({ ...m, _tournament: tournament.name, _sport: tournament.sport })) as any[];
+
+const hasTabs = !!(tournament.standings || tournament.groups?.length || tournament.playerStats?.length);
+---
+
+<Base
+  title={`${tournament.name} | Parches`}
+  description={tournament.description ?? `Sigue ${tournament.name} en vivo en Parches.`}
+>
+
+  <!-- Tournament hero header -->
+  <TournamentHero tournament={tournament} />
+
+  <main class="t-page">
+    <div class="t-page__inner">
+
+      <!-- Sticky section tabs -->
+      {hasTabs && (
+        <nav class="t-tabs" id="tTabs" aria-label="Secciones del torneo">
+          {liveNow.length > 0 && (
+            <a href="#en-vivo" class="t-tab t-tab--live">
+              <span class="t-tab__dot" aria-hidden="true"></span>
+              En vivo
+            </a>
+          )}
+          {tournament.standings && (
+            <a href="#tabla" class="t-tab">Tabla</a>
+          )}
+          {tournament.playerStats?.length && (
+            <a href="#estadisticas" class="t-tab">Estadísticas</a>
+          )}
+          {tournament.groups && (
+            <a href="#fixture" class="t-tab">Fixture</a>
+          )}
+        </nav>
+      )}
+
+      <!-- Live now mini strip -->
+      {liveNow.length > 0 && (
+        <section id="en-vivo" class="t-section" aria-label="Partidos en vivo">
+          <LiveStrip matches={liveNow} />
+        </section>
+      )}
+
+      <!-- Standings -->
+      {tournament.standings && (
+        <section id="tabla" class="t-section" aria-label="Tabla de posiciones">
+          <StandingsTable
+            standings={tournament.standings}
+            sport={tournament.sport}
+            qualifyingSpots={4}
+            brandColor={tournament.brandColor}
+          />
+        </section>
+      )}
+
+      <!-- Player stats (goleadores, valla, etc.) -->
+      {tournament.playerStats?.length && (
+        <section id="estadisticas" class="t-section" aria-label="Estadísticas de jugadores">
+          <PlayerStatsTable
+            stats={tournament.playerStats}
+            brandColor={tournament.brandColor}
+          />
+        </section>
+      )}
+
+      <!-- Fixture -->
+      {tournament.groups && tournament.groups.length > 0 && (
+        <section id="fixture" class="t-section" aria-label="Fixture del torneo">
+          <MatchFixture groups={tournament.groups} />
+        </section>
+      )}
+
+    </div><!-- /.t-page__inner -->
+  </main>
+
+</Base>
+
+<style>
+/* Page layout */
+.t-page {
+  flex: 1;
+  padding-bottom: 60px;
+}
+.t-page__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Sticky section tabs */
+.t-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 14px 24px;
+  position: sticky;
+  top: 50px;           /* below the 50px navbar */
+  z-index: 10;
+  background: rgba(10,12,15,0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.t-tab {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: color var(--transition), background var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.t-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+.t-tab--live {
+  color: var(--live);
+  background: var(--live-dim);
+  border: 1px solid rgba(255,59,59,0.25);
+}
+.t-tab--live:hover { opacity: 0.85; }
+
+.t-tab__dot {
+  width: 5px; height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+}
+
+/* Sections spacing */
+.t-section {
+  padding-top: 28px;
+  scroll-margin-top: 100px; /* offset for sticky tabs */
+}
+</style>
+
+<script>
+  // Highlight active tab on scroll
+  (function () {
+    const tabs    = document.querySelectorAll<HTMLAnchorElement>('.t-tab');
+    const sections = document.querySelectorAll<HTMLElement>('.t-section');
+    if (!tabs.length || !sections.length) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            tabs.forEach(tab => {
+              const isActive = tab.getAttribute('href') === `#${id}`;
+              if (!tab.classList.contains('t-tab--live')) {
+                tab.style.color = isActive
+                  ? 'var(--accent)'
+                  : '';
+                tab.style.background = isActive
+                  ? 'var(--accent-dim)'
+                  : '';
+              }
+            });
+          }
+        });
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    );
+
+    sections.forEach(s => observer.observe(s));
+  })();
+</script>

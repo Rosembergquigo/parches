@@ -1,0 +1,274 @@
+---
+/**
+ * StandingsTable.astro — tabla de posiciones.
+ *
+ * Usada por torneos de fútbol y baloncesto.
+ * Las primeras N posiciones (clasificación) se resaltan con
+ * un acento left-border en cyan.
+ * Solo se renderiza si hay datos de standings.
+ */
+import type { StandingsRow } from '../../data/mock';
+
+interface Props {
+  standings: StandingsRow[];
+  qualifyingSpots?: number;    // cuántos clasifican (default 4)
+  sport?: string;
+  brandColor?: string;         // color de marca del torneo para el acento de clasificación
+}
+
+const { standings, qualifyingSpots = 4, sport = 'football', brandColor } = Astro.props;
+
+// Color del acento de clasificación: brandColor si existe, sino cyan
+const qualifyColor = brandColor ?? 'var(--accent)';
+
+// Column labels differ slightly by sport
+const isBasket = sport === 'basketball';
+---
+
+<div class="standings">
+  <h2 class="standings__title">Tabla de posiciones</h2>
+
+  <div class="standings__table-wrap">
+    <table class="standings__table" aria-label="Tabla de posiciones del torneo">
+      <thead>
+        <tr>
+          <th class="col-pos" scope="col">#</th>
+          <th class="col-team" scope="col">Equipo</th>
+          <th class="col-num" scope="col" title="Partidos jugados">PJ</th>
+          <th class="col-num" scope="col" title="Ganados">G</th>
+          <th class="col-num" scope="col" title="Empatados">{isBasket ? '—' : 'E'}</th>
+          <th class="col-num" scope="col" title="Perdidos">P</th>
+          {!isBasket && (
+            <>
+              <th class="col-num" scope="col" title="Goles a favor">GF</th>
+              <th class="col-num" scope="col" title="Goles en contra">GC</th>
+              <th class="col-num" scope="col" title="Diferencia de gol">DG</th>
+            </>
+          )}
+          <th class="col-pts" scope="col" title="Puntos">PTS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {standings.map((row, i) => {
+          const qualifies  = i < qualifyingSpots;
+          const goalDiff   = row.goalsFor - row.goalsAgainst;
+          const diffStr    = goalDiff > 0 ? `+${goalDiff}` : String(goalDiff);
+          return (
+            <tr
+              class:list={['standings__row', qualifies && 'standings__row--qualify']}
+              style={qualifies ? `border-left-color: ${qualifyColor};` : ''}
+              aria-label={`${row.position}. ${row.team.name}: ${row.points} puntos`}
+            >
+              <td class="col-pos">
+                <span
+                  class:list={['pos-num', qualifies && 'pos-num--qualify']}
+                  style={qualifies ? `color: ${qualifyColor};` : ''}
+                >
+                  {row.position}
+                </span>
+              </td>
+              <td class="col-team">
+                <div class="team-cell">
+                  <div class="team-logo" aria-hidden="true">{row.team.shortName}</div>
+                  <span class="team-name">{row.team.name}</span>
+                </div>
+              </td>
+              <td class="col-num">{row.played}</td>
+              <td class="col-num col-win">{row.won}</td>
+              <td class="col-num">{isBasket ? '—' : row.drawn}</td>
+              <td class="col-num col-loss">{row.lost}</td>
+              {!isBasket && (
+                <>
+                  <td class="col-num">{row.goalsFor}</td>
+                  <td class="col-num">{row.goalsAgainst}</td>
+                  <td class:list={['col-num', goalDiff > 0 ? 'col-pos-diff' : goalDiff < 0 ? 'col-neg-diff' : '']}>
+                    {diffStr}
+                  </td>
+                </>
+              )}
+              <td class="col-pts">
+                <strong>{row.points}</strong>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Legend -->
+  <div class="standings__legend">
+    <span
+      class="legend-dot"
+      style={`background: ${qualifyColor};`}
+    ></span>
+    <span class="legend-label">Clasifica a cuadrangulares</span>
+  </div>
+</div>
+
+<style>
+.standings {
+  padding: 0 24px;
+  margin-bottom: 36px;
+}
+.standings__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+/* Scroll wrapper for small screens */
+.standings__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.standings__table-wrap::-webkit-scrollbar { height: 3px; }
+.standings__table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+thead tr {
+  border-bottom: 1px solid var(--border);
+}
+thead th {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+thead .col-team { text-align: left; }
+
+/* Rows */
+.standings__row {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  position: relative;
+}
+.standings__row:last-child { border-bottom: none; }
+.standings__row:hover { background: var(--bg-raised); }
+
+/* Qualifying accent: left border */
+.standings__row--qualify {
+  border-left: 2px solid var(--accent);
+}
+.standings__row--qualify td:first-child {
+  padding-left: 10px;
+}
+
+/* Cell columns */
+.col-pos {
+  width: 40px;
+  text-align: center;
+  padding: 10px 8px;
+}
+.col-team {
+  padding: 10px 12px;
+  text-align: left;
+}
+.col-num {
+  width: 36px;
+  text-align: center;
+  padding: 10px 6px;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.col-pts {
+  width: 44px;
+  text-align: center;
+  padding: 10px 12px;
+}
+.col-pts strong {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+.col-win  { color: var(--success) !important; }
+.col-loss { color: var(--live) !important; }
+.col-pos-diff { color: var(--success) !important; }
+.col-neg-diff { color: var(--live) !important; }
+
+/* Position number */
+.pos-num {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.pos-num--qualify { color: var(--accent); }
+
+/* Team cell */
+.team-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.team-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.48rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+.team-name {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Legend */
+.standings__legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+.legend-dot {
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+}
+.legend-dot--qualify { background: var(--accent); }
+.legend-label {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+</style>
