@@ -1,0 +1,286 @@
+---
+/**
+ * ProfileHeader.astro — cabecera del perfil de usuario.
+ *
+ * Muestra avatar (imagen o iniciales), nombre, rol, bio
+ * y las métricas principales según el rol:
+ *   VIEWER   → torneos seguidos + partidos vistos
+ *   REFEREE  → partidos arbitrados + eventos registrados
+ *   ORGANIZER/ADMIN → indicador de rol
+ *
+ * isOwn=true agrega el botón de editar perfil.
+ */
+import type { UserProfile } from '../../data/mock';
+
+interface Props {
+  user: UserProfile;
+  isOwn?: boolean;
+}
+
+const { user, isOwn = false } = Astro.props;
+
+const ROLE_LABEL: Record<string, string> = {
+  VIEWER:    'Espectador',
+  REFEREE:   'Árbitro',
+  ORGANIZER: 'Organizador',
+  ADMIN:     'Admin',
+};
+
+const ROLE_COLOR: Record<string, string> = {
+  VIEWER:    'var(--text-secondary)',
+  REFEREE:   'var(--accent)',
+  ORGANIZER: '#f5a623',
+  ADMIN:     'var(--live)',
+};
+
+const ROLE_BG: Record<string, string> = {
+  VIEWER:    'rgba(255,255,255,0.06)',
+  REFEREE:   'var(--accent-dim)',
+  ORGANIZER: 'rgba(245,166,35,0.12)',
+  ADMIN:     'var(--live-dim)',
+};
+
+const initials = user.name
+  .split(' ')
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('');
+
+const memberSince = new Date(user.createdAt).toLocaleDateString('es-CO', {
+  year: 'numeric', month: 'long',
+});
+
+// Stat cards por rol
+const stats = user.role === 'REFEREE'
+  ? [
+      { label: 'Partidos arbitrados', value: user.matchesRefereed ?? 0 },
+      { label: 'Eventos registrados', value: user.eventsLogged ?? 0 },
+    ]
+  : user.role === 'VIEWER'
+  ? [
+      { label: 'Torneos seguidos', value: user.tournamentsFollowed ?? 0 },
+      { label: 'Partidos vistos',  value: user.matchesWatched ?? 0 },
+    ]
+  : [];
+---
+
+<div class="ph">
+  <div class="ph__inner">
+
+    <!-- Left: avatar + identity -->
+    <div class="ph__identity">
+      {user.avatarUrl ? (
+        <img
+          src={user.avatarUrl}
+          alt={`Foto de ${user.name}`}
+          class="ph__avatar ph__avatar--img"
+          width="72" height="72"
+        />
+      ) : (
+        <div class="ph__avatar ph__avatar--initials" aria-hidden="true">
+          {initials}
+        </div>
+      )}
+
+      <div class="ph__info">
+        <div class="ph__name-row">
+          <h1 class="ph__name">{user.name}</h1>
+          {isOwn && (
+            <a href="/settings" class="ph__edit-btn" aria-label="Editar perfil">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Editar
+            </a>
+          )}
+        </div>
+
+        <div class="ph__badges">
+          <span
+            class="ph__role-badge"
+            style={`color:${ROLE_COLOR[user.role]}; background:${ROLE_BG[user.role]}; border-color:${ROLE_COLOR[user.role]}44;`}
+          >
+            {ROLE_LABEL[user.role]}
+          </span>
+          <span class="ph__since">Miembro desde {memberSince}</span>
+        </div>
+
+        {user.bio && (
+          <p class="ph__bio">{user.bio}</p>
+        )}
+      </div>
+    </div>
+
+    <!-- Right: stat cards -->
+    {stats.length > 0 && (
+      <div class="ph__stats">
+        {stats.map(s => (
+          <div class="ph__stat-card">
+            <span class="ph__stat-value">{s.value}</span>
+            <span class="ph__stat-label">{s.label}</span>
+          </div>
+        ))}
+      </div>
+    )}
+
+  </div>
+</div>
+
+<style>
+.ph {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.ph__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 28px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+/* Identity block */
+.ph__identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.ph__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.ph__avatar--img {
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.ph__avatar--initials {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.ph__info { flex: 1; }
+.ph__name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.ph__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.ph__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: color var(--transition), border-color var(--transition);
+}
+.ph__edit-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.ph__badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.ph__role-badge {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid;
+  border-radius: 3px;
+}
+.ph__since {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ph__bio {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 480px;
+}
+
+/* Stat cards */
+.ph__stats {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.ph__stat-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 110px;
+}
+.ph__stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 5px;
+}
+.ph__stat-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .ph__inner { flex-direction: column; align-items: flex-start; }
+  .ph__stats { width: 100%; }
+  .ph__stat-card { flex: 1; }
+}
+</style>

@@ -496,3 +496,267 @@ export const MATCH_STATS_BY_SPORT: Record<Sport, (home: string, away: string) =>
 
 // Agregar stats al mock del partido m1
 MOCK_MATCH_DETAIL.stats = MATCH_STATS_BY_SPORT.football();
+
+// ── User profile mock data ────────────────────────────────
+
+export type UserRole = 'VIEWER' | 'REFEREE' | 'ORGANIZER' | 'ADMIN';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt: string;
+  avatarUrl?: string;
+  bio?: string;
+  // VIEWER stats
+  tournamentsFollowed?: number;
+  matchesWatched?: number;
+  // REFEREE stats
+  matchesRefereed?: number;
+  eventsLogged?: number;
+}
+
+export interface ScheduledMatchItem {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  tournamentName: string;
+  sport: Sport;
+  scheduledAt: string;
+  status: MatchStatus;
+  role: 'viewer' | 'referee';  // qué hace el usuario en este partido
+}
+
+export interface HistoryMatchItem {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  tournamentName: string;
+  sport: Sport;
+  playedAt: string;
+  role: 'viewer' | 'referee';
+}
+
+// Mock viewer profile
+export const MOCK_USER_VIEWER: UserProfile = {
+  id: 'u1',
+  name: 'Carlos Mendoza',
+  email: 'carlos@example.com',
+  role: 'VIEWER',
+  createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+  tournamentsFollowed: 4,
+  matchesWatched: 23,
+};
+
+// Mock referee profile
+export const MOCK_USER_REFEREE: UserProfile = {
+  id: 'u2',
+  name: 'Jorge Ospina',
+  email: 'jorge@parches.app',
+  role: 'REFEREE',
+  createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+  bio: 'Árbitro FIFA desde 2018. Liga BetPlay y Copa Colombia.',
+  matchesRefereed: 47,
+  eventsLogged: 312,
+};
+
+// Mock schedule — próximos partidos
+export const MOCK_USER_SCHEDULE: ScheduledMatchItem[] = [
+  {
+    matchId: 'm3',
+    homeTeam: 'Atlético Nacional',
+    awayTeam: 'Deportivo Cali',
+    tournamentName: 'Liga BetPlay Dimayor',
+    sport: 'football',
+    scheduledAt: new Date(Date.now() + 3.3 * 60 * 60 * 1000).toISOString(),
+    status: 'SCHEDULED',
+    role: 'viewer',
+  },
+  {
+    matchId: 'm6',
+    homeTeam: 'Cocodrilos del Chocó',
+    awayTeam: 'Vaqueros de Montería',
+    tournamentName: 'Liga Nacional de Baloncesto',
+    sport: 'basketball',
+    scheduledAt: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString(),
+    status: 'SCHEDULED',
+    role: 'viewer',
+  },
+  {
+    matchId: 'm8',
+    homeTeam: 'Colombia',
+    awayTeam: 'Brasil',
+    tournamentName: 'Sudamericano Voleibol',
+    sport: 'volleyball',
+    scheduledAt: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'SCHEDULED',
+    role: 'viewer',
+  },
+];
+
+// Mock history — partidos vistos
+export const MOCK_USER_HISTORY: HistoryMatchItem[] = [
+  { matchId: 'm4', homeTeam: 'Santa Fe', awayTeam: 'Deportivo Pasto', homeScore: 3, awayScore: 1, tournamentName: 'Liga BetPlay', sport: 'football', playedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), role: 'viewer' },
+  { matchId: 'mh2', homeTeam: 'Búcaros', awayTeam: 'Piratas', homeScore: 72, awayScore: 68, tournamentName: 'LNB', sport: 'basketball', playedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), role: 'viewer' },
+  { matchId: 'mh3', homeTeam: 'América', awayTeam: 'Junior', homeScore: 1, awayScore: 1, tournamentName: 'Liga BetPlay', sport: 'football', playedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), role: 'viewer' },
+  { matchId: 'mh4', homeTeam: 'Cabal', awayTeam: 'García', homeScore: 2, awayScore: 1, tournamentName: 'Copa Davis', sport: 'tennis', playedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), role: 'viewer' },
+];
+
+export function getMockUserById(id: string): UserProfile | null {
+  if (id === 'u1') return MOCK_USER_VIEWER;
+  if (id === 'u2') return MOCK_USER_REFEREE;
+  return null;
+}
+
+// ── Player profile mock data ──────────────────────────────
+
+export interface PlayerEnrollment {
+  id: string;
+  tournamentId: string;
+  tournamentName: string;
+  tournamentSlug: string;
+  sport: Sport;
+  teamId: string;
+  teamName: string;
+  teamShortName: string;
+  jerseyNumber?: number;
+  position?: string;
+  isActive: boolean;
+  // Stats acumuladas en este torneo (shape depende del deporte)
+  tournamentStats?: Record<string, number>;
+  matchesPlayed: number;
+}
+
+// Stats por deporte — qué métricas muestra el perfil del jugador
+export interface PlayerStatDef {
+  key: string;       // key en tournamentStats
+  label: string;     // "Goles", "Puntos", "Aces"
+  shortLabel: string;// "G", "Pts", "A"
+}
+
+export const PLAYER_STAT_DEFS: Record<Sport, PlayerStatDef[]> = {
+  football: [
+    { key: 'goals',        label: 'Goles',        shortLabel: 'G'  },
+    { key: 'assists',      label: 'Asistencias',  shortLabel: 'A'  },
+    { key: 'yellowCards',  label: 'T. Amarillas', shortLabel: 'TA' },
+    { key: 'redCards',     label: 'T. Rojas',     shortLabel: 'TR' },
+    { key: 'minutesPlayed',label: 'Minutos',      shortLabel: 'Min'},
+  ],
+  basketball: [
+    { key: 'points',       label: 'Puntos',       shortLabel: 'Pts'},
+    { key: 'rebounds',     label: 'Rebotes',      shortLabel: 'Reb'},
+    { key: 'assists',      label: 'Asistencias',  shortLabel: 'Ast'},
+    { key: 'steals',       label: 'Robos',        shortLabel: 'Rob'},
+    { key: 'blocks',       label: 'Bloqueos',     shortLabel: 'Blq'},
+  ],
+  tennis: [
+    { key: 'aces',         label: 'Aces',         shortLabel: 'Ac' },
+    { key: 'doubleFaults', label: 'Dobles faltas',shortLabel: 'DF' },
+    { key: 'winners',      label: 'Winners',      shortLabel: 'W'  },
+    { key: 'firstServePct',label: '1er Servicio', shortLabel: '1S' },
+  ],
+  volleyball: [
+    { key: 'points',       label: 'Puntos',       shortLabel: 'Pts'},
+    { key: 'aces',         label: 'Aces',         shortLabel: 'Ac' },
+    { key: 'blocks',       label: 'Bloqueos',     shortLabel: 'Blq'},
+    { key: 'attacks',      label: 'Ataques',      shortLabel: 'Atq'},
+  ],
+  baseball: [
+    { key: 'hits',         label: 'Hits',         shortLabel: 'H'  },
+    { key: 'runs',         label: 'Carreras',     shortLabel: 'R'  },
+    { key: 'rbi',          label: 'Carreras imp.',shortLabel: 'RBI'},
+    { key: 'strikeouts',   label: 'Ponches',      shortLabel: 'K'  },
+  ],
+  hockey: [
+    { key: 'goals',        label: 'Goles',        shortLabel: 'G'  },
+    { key: 'assists',      label: 'Asistencias',  shortLabel: 'A'  },
+    { key: 'shots',        label: 'Tiros',        shortLabel: 'T'  },
+    { key: 'penaltyMin',   label: 'Min. penalti', shortLabel: 'PIM'},
+  ],
+};
+
+export interface PlayerProfileDetail {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'PLAYER';
+  createdAt: string;
+  avatarUrl?: string;
+  bio?: string;
+  nationality?: string;
+  dateOfBirth?: string;
+  height?: number;
+  weight?: number;
+  dominantHand?: string;
+  // Inscripciones activas e históricas
+  enrollments: PlayerEnrollment[];
+}
+
+// Mock jugador multi-deporte
+export const MOCK_USER_PLAYER: PlayerProfileDetail = {
+  userId: 'u3',
+  name: 'Sebastián Torres',
+  email: 'sebas@example.com',
+  role: 'PLAYER',
+  createdAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
+  bio: 'Delantero y ala en baloncesto. Juego fútbol desde los 8 años y basket desde los 15.',
+  nationality: 'COL',
+  dateOfBirth: '2000-03-14',
+  height: 181,
+  weight: 76,
+  enrollments: [
+    {
+      id: 'enr1',
+      tournamentId: 't1',
+      tournamentName: 'Liga BetPlay Dimayor',
+      tournamentSlug: 'liga-betplay-2025',
+      sport: 'football',
+      teamId: 'med',
+      teamName: 'Independiente Medellín',
+      teamShortName: 'MED',
+      jerseyNumber: 11,
+      position: 'Delantero',
+      isActive: true,
+      matchesPlayed: 14,
+      tournamentStats: { goals: 7, assists: 3, yellowCards: 2, redCards: 0, minutesPlayed: 1180 },
+    },
+    {
+      id: 'enr2',
+      tournamentId: 't2',
+      tournamentName: 'Liga Nacional de Baloncesto',
+      tournamentSlug: 'lnb-2025',
+      sport: 'basketball',
+      teamId: 'buc',
+      teamName: 'Búcaros de Bucaramanga',
+      teamShortName: 'BUC',
+      jerseyNumber: 23,
+      position: 'Alero',
+      isActive: true,
+      matchesPlayed: 8,
+      tournamentStats: { points: 112, rebounds: 34, assists: 18, steals: 9, blocks: 4 },
+    },
+    {
+      id: 'enr3',
+      tournamentId: 'told1',
+      tournamentName: 'Copa BetPlay 2024',
+      tournamentSlug: 'copa-betplay-2024',
+      sport: 'football',
+      teamId: 'med',
+      teamName: 'Independiente Medellín',
+      teamShortName: 'MED',
+      jerseyNumber: 11,
+      position: 'Delantero',
+      isActive: false,
+      matchesPlayed: 6,
+      tournamentStats: { goals: 3, assists: 1, yellowCards: 1, redCards: 0, minutesPlayed: 430 },
+    },
+  ],
+};
+
+export function getMockPlayerById(userId: string): PlayerProfileDetail | null {
+  if (userId === 'u3') return MOCK_USER_PLAYER;
+  return null;
+}

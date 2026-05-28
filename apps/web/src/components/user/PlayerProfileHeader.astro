@@ -1,0 +1,355 @@
+---
+/**
+ * PlayerProfileHeader.astro — cabecera del perfil de jugador.
+ *
+ * Muestra: avatar/iniciales, nombre, bio, datos físicos
+ * y un resumen agregado de deportes activos.
+ */
+import type { PlayerProfileDetail } from '../../data/mock';
+
+interface Props {
+  player: PlayerProfileDetail;
+  isOwn?: boolean;
+}
+
+const { player, isOwn = false } = Astro.props;
+
+const initials = player.name
+  .split(' ')
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('');
+
+const memberSince = new Date(player.createdAt).toLocaleDateString('es-CO', {
+  year: 'numeric', month: 'long',
+});
+
+// Deportes únicos activos
+const activeSports = [...new Set(
+  player.enrollments
+    .filter(e => e.isActive)
+    .map(e => e.sport)
+)];
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
+  volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
+};
+
+const sportBg: Record<string, string> = {
+  football:   'linear-gradient(135deg,#0a1e12,#1a4d2e)',
+  basketball: 'linear-gradient(135deg,#1e120a,#4d2e0a)',
+  tennis:     'linear-gradient(135deg,#141e08,#2e4d0a)',
+  volleyball: 'linear-gradient(135deg,#08122b,#0a2e4d)',
+  baseball:   'linear-gradient(135deg,#1e0a12,#4d0a2e)',
+  hockey:     'linear-gradient(135deg,#0e0a1e,#1a0a4d)',
+};
+
+// Totales rápidos
+const totalMatches = player.enrollments.reduce((s, e) => s + e.matchesPlayed, 0);
+const activeEnrollments = player.enrollments.filter(e => e.isActive).length;
+
+// Edad
+function getAge(dob?: string): number | null {
+  if (!dob) return null;
+  const diff = Date.now() - new Date(dob).getTime();
+  return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+}
+const age = getAge(player.dateOfBirth);
+---
+
+<div class="pph">
+  <div class="pph__inner">
+
+    <!-- Identity -->
+    <div class="pph__identity">
+      {player.avatarUrl ? (
+        <img src={player.avatarUrl} alt={`Foto de ${player.name}`}
+          class="pph__avatar pph__avatar--img" width="80" height="80" />
+      ) : (
+        <div class="pph__avatar pph__avatar--initials" aria-hidden="true">
+          {initials}
+        </div>
+      )}
+
+      <div class="pph__info">
+        <div class="pph__name-row">
+          <h1 class="pph__name">{player.name}</h1>
+          {isOwn && (
+            <a href="/settings" class="pph__edit-btn" aria-label="Editar perfil">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Editar
+            </a>
+          )}
+        </div>
+
+        <!-- Role + sports badges -->
+        <div class="pph__badges">
+          <span class="pph__role-badge">Jugador</span>
+          {activeSports.map(s => (
+            <span class="pph__sport-badge" style={`background:${sportBg[s]}; border-color:rgba(255,255,255,0.12);`}>
+              {sportLabel[s]}
+            </span>
+          ))}
+          <span class="pph__since">Desde {memberSince}</span>
+        </div>
+
+        {player.bio && <p class="pph__bio">{player.bio}</p>}
+
+        <!-- Physical data row -->
+        <div class="pph__physical">
+          {age && (
+            <span class="pph__phys-item">
+              <span class="pph__phys-label">Edad</span>
+              <span class="pph__phys-val">{age} años</span>
+            </span>
+          )}
+          {player.height && (
+            <span class="pph__phys-item">
+              <span class="pph__phys-label">Talla</span>
+              <span class="pph__phys-val">{player.height} cm</span>
+            </span>
+          )}
+          {player.weight && (
+            <span class="pph__phys-item">
+              <span class="pph__phys-label">Peso</span>
+              <span class="pph__phys-val">{player.weight} kg</span>
+            </span>
+          )}
+          {player.nationality && (
+            <span class="pph__phys-item">
+              <span class="pph__phys-label">País</span>
+              <span class="pph__phys-val">{player.nationality}</span>
+            </span>
+          )}
+          {player.dominantHand && (
+            <span class="pph__phys-item">
+              <span class="pph__phys-label">Mano</span>
+              <span class="pph__phys-val">{player.dominantHand === 'right' ? 'Derecha' : 'Izquierda'}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="pph__stats">
+      <div class="pph__stat-card">
+        <span class="pph__stat-num">{totalMatches}</span>
+        <span class="pph__stat-lbl">Partidos jugados</span>
+      </div>
+      <div class="pph__stat-card">
+        <span class="pph__stat-num">{activeEnrollments}</span>
+        <span class="pph__stat-lbl">Equipos activos</span>
+      </div>
+      <div class="pph__stat-card">
+        <span class="pph__stat-num">{activeSports.length}</span>
+        <span class="pph__stat-lbl">Deportes</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.pph {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.pph__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 28px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+/* Identity */
+.pph__identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
+}
+.pph__avatar {
+  width: 80px; height: 80px;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.pph__avatar--img {
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.pph__avatar--initials {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.pph__info { flex: 1; min-width: 0; }
+.pph__name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.pph__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.pph__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: color var(--transition), border-color var(--transition);
+  flex-shrink: 0;
+}
+.pph__edit-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
+
+/* Badges */
+.pph__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.pph__role-badge {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid rgba(0,229,255,.35);
+  border-radius: 3px;
+  background: var(--accent-dim);
+}
+.pph__sport-badge {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 3px;
+}
+.pph__since {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pph__bio {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  max-width: 520px;
+}
+
+/* Physical data */
+.pph__physical {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.pph__phys-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pph__phys-label {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pph__phys-val {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+/* Quick stats */
+.pph__stats {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.pph__stat-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 20px;
+  text-align: center;
+  min-width: 90px;
+}
+.pph__stat-num {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.pph__stat-lbl {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .pph__inner { flex-direction: column; }
+  .pph__stats { width: 100%; }
+  .pph__stat-card { flex: 1; }
+}
+</style>

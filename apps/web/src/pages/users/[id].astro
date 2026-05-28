@@ -1,0 +1,130 @@
+---
+/**
+ * pages/users/[id].astro — perfil público.
+ *
+ * Sin auth guard — cualquiera puede verlo.
+ * Solo muestra datos públicos: nombre, rol, stats agregadas.
+ * NO muestra email, schedule privado, ni historial detallado.
+ *
+ * Un referee tiene perfil público porque su historial de partidos
+ * arbitrados es información relevante para los organizadores.
+ */
+import Base from '../../layouts/Base.astro';
+import ProfileHeader from '../../components/user/ProfileHeader.astro';
+import { getMockUserById } from '../../data/mock';
+
+const { id } = Astro.params;
+const user = getMockUserById(id!);
+
+if (!user) return Astro.redirect('/404');
+
+const isReferee = user.role === 'REFEREE';
+---
+
+<Base
+  title={`${user.name} | Parches`}
+  description={`Perfil de ${user.name} en Parches`}
+>
+  <ProfileHeader user={user} isOwn={false} />
+
+  <main class="pub-profile">
+    <div class="pub-profile__inner">
+
+      {isReferee && (
+        <section class="pub-section" aria-label="Información del árbitro">
+          <h2 class="pub-section__title">Árbitro verificado</h2>
+          <div class="referee-card">
+            <div class="referee-card__icon">🏅</div>
+            <div class="referee-card__info">
+              <p class="referee-card__text">
+                {user.name} ha arbitrado <strong>{user.matchesRefereed}</strong> partidos
+                en la plataforma con <strong>{user.eventsLogged}</strong> eventos registrados.
+              </p>
+              {user.bio && <p class="referee-card__bio">{user.bio}</p>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {!isReferee && (
+        <section class="pub-section" aria-label="Actividad pública">
+          <div class="viewer-card">
+            <p class="viewer-card__text">
+              Este perfil es privado. Solo el usuario puede ver su historial completo.
+            </p>
+          </div>
+        </section>
+      )}
+
+    </div>
+  </main>
+</Base>
+
+<style>
+.pub-profile {
+  flex: 1;
+  padding-bottom: 60px;
+}
+.pub-profile__inner {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 28px;
+}
+
+.pub-section { margin-bottom: 28px; }
+.pub-section__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.referee-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.referee-card__icon { font-size: 2rem; flex-shrink: 0; }
+.referee-card__info {}
+.referee-card__text {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.referee-card__text strong { color: var(--accent); font-weight: 700; }
+.referee-card__bio {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.viewer-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  text-align: center;
+}
+.viewer-card__text {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .pub-profile__inner { padding: 20px 16px; }
+}
+</style>

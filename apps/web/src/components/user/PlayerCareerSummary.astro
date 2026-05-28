@@ -1,0 +1,250 @@
+---
+/**
+ * PlayerCareerSummary.astro — resumen de carrera del jugador.
+ *
+ * Agrupa todas las inscripciones por deporte y suma las estadísticas.
+ * Muestra un card por deporte con los totales acumulados.
+ *
+ * Usa PLAYER_STAT_DEFS para saber qué métricas mostrar por deporte,
+ * así es completamente genérico — no tiene lógica específica por deporte.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { PlayerProfileDetail } from '../../data/mock';
+import { PLAYER_STAT_DEFS } from '../../data/mock';
+
+interface Props {
+  player: PlayerProfileDetail;
+}
+
+const { player } = Astro.props;
+
+// Agrupar inscripciones por deporte y acumular stats
+type SportSummary = {
+  sport: string;
+  totalMatches: number;
+  tournamentsCount: number;
+  teamsSet: Set<string>;
+  stats: Record<string, number>;
+};
+
+const summaryMap = new Map<string, SportSummary>();
+
+for (const enrollment of player.enrollments) {
+  const { sport, teamId, matchesPlayed, tournamentStats } = enrollment;
+
+  if (!summaryMap.has(sport)) {
+    summaryMap.set(sport, {
+      sport,
+      totalMatches: 0,
+      tournamentsCount: 0,
+      teamsSet: new Set(),
+      stats: {},
+    });
+  }
+
+  const s = summaryMap.get(sport)!;
+  s.totalMatches    += matchesPlayed;
+  s.tournamentsCount += 1;
+  s.teamsSet.add(teamId);
+
+  if (tournamentStats) {
+    for (const [key, val] of Object.entries(tournamentStats)) {
+      s.stats[key] = (s.stats[key] ?? 0) + val;
+    }
+  }
+}
+
+const summaries = [...summaryMap.values()];
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
+  volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
+};
+
+const sportBg: Record<string, string> = {
+  football:   'linear-gradient(135deg,#0a1e12,#1a4d2e)',
+  basketball: 'linear-gradient(135deg,#1e120a,#4d2e0a)',
+  tennis:     'linear-gradient(135deg,#141e08,#2e4d0a)',
+  volleyball: 'linear-gradient(135deg,#08122b,#0a2e4d)',
+  baseball:   'linear-gradient(135deg,#1e0a12,#4d0a2e)',
+  hockey:     'linear-gradient(135deg,#0e0a1e,#1a0a4d)',
+};
+---
+
+{summaries.length > 0 && (
+  <section class="pcs" aria-label="Resumen de carrera">
+    <h2 class="pcs__title">Resumen de carrera</h2>
+
+    <div class="pcs__grid">
+      {summaries.map(s => {
+        const defs = PLAYER_STAT_DEFS[s.sport as keyof typeof PLAYER_STAT_DEFS] ?? [];
+        return (
+          <div class="pcs__card">
+            <!-- Sport header -->
+            <div class="pcs__card-header" style={`background: ${sportBg[s.sport]}`}>
+              <div class="pcs__header-overlay" aria-hidden="true"></div>
+              <div class="pcs__header-content">
+                <div class="pcs__sport-icon">
+                  <SportIcon sport={s.sport as any} size={18} stroke="rgba(255,255,255,0.85)" />
+                </div>
+                <span class="pcs__sport-label">{sportLabel[s.sport]}</span>
+              </div>
+              <div class="pcs__header-meta">
+                <span class="pcs__meta-item">{s.totalMatches} partidos</span>
+                <span class="pcs__meta-sep">·</span>
+                <span class="pcs__meta-item">{s.tournamentsCount} torneo{s.tournamentsCount !== 1 ? 's' : ''}</span>
+                <span class="pcs__meta-sep">·</span>
+                <span class="pcs__meta-item">{s.teamsSet.size} equipo{s.teamsSet.size !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+
+            <!-- Aggregated stats -->
+            <div class="pcs__stats">
+              {defs.map(def => (
+                <div class="pcs__stat">
+                  <span class="pcs__stat-val">
+                    {s.stats[def.key] ?? 0}
+                    {def.key.endsWith('Pct') ? '%' : ''}
+                  </span>
+                  <span class="pcs__stat-short">{def.shortLabel}</span>
+                  <span class="pcs__stat-label">{def.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </section>
+)}
+
+<style>
+.pcs { margin-bottom: 32px; }
+.pcs__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.pcs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+/* Card */
+.pcs__card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.pcs__card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+
+/* Header */
+.pcs__card-header {
+  position: relative;
+  padding: 14px 16px 10px;
+  overflow: hidden;
+}
+.pcs__header-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to right, transparent 40%, rgba(0,0,0,0.35));
+  pointer-events: none;
+}
+.pcs__header-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.pcs__sport-icon {
+  width: 30px; height: 30px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pcs__sport-label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+.pcs__header-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pcs__meta-item {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.pcs__meta-sep { color: rgba(255,255,255,0.25); font-size: 0.6rem; }
+
+/* Stats */
+.pcs__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  padding: 14px 16px;
+  gap: 2px;
+}
+.pcs__stat {
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  transition: background var(--transition);
+}
+.pcs__stat:hover { background: var(--bg-raised); }
+
+.pcs__stat-val {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.pcs__stat-short {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.pcs__stat-label {
+  display: none;
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.pcs__stat:hover .pcs__stat-label { display: block; }
+</style>

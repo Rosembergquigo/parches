@@ -1,0 +1,210 @@
+---
+/**
+ * UserSchedule.astro — próximos partidos programados del usuario.
+ *
+ * Un viewer ve sus partidos guardados/programados.
+ * Un referee ve los partidos que tiene asignados para arbitrar.
+ * El componente es el mismo — el label del rol cambia.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { ScheduledMatchItem } from '../../data/mock';
+
+interface Props {
+  matches: ScheduledMatchItem[];
+  userRole: string;
+}
+
+const { matches, userRole } = Astro.props;
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffH = (d.getTime() - now.getTime()) / 3_600_000;
+
+  if (diffH < 1)   return `En ${Math.round(diffH * 60)} min`;
+  if (diffH < 24)  return `Hoy ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+  if (diffH < 48)  return `Mañana ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+const sectionTitle = userRole === 'REFEREE' ? 'Partidos asignados' : 'Próximos partidos';
+const emptyMsg     = userRole === 'REFEREE' ? 'No tienes partidos asignados' : 'No tienes partidos programados';
+---
+
+<section class="us" aria-label={sectionTitle}>
+  <h2 class="us__title">{sectionTitle}</h2>
+
+  {matches.length === 0 && (
+    <div class="us__empty">{emptyMsg}</div>
+  )}
+
+  <div class="us__list">
+    {matches.map(m => {
+      const dateLabel = formatDate(m.scheduledAt);
+      const isSoon    = (new Date(m.scheduledAt).getTime() - Date.now()) < 3 * 60 * 60 * 1000;
+      return (
+        <a href={`/matches/${m.matchId}`} class="us__item" aria-label={`${m.homeTeam} vs ${m.awayTeam}`}>
+          <!-- Sport icon -->
+          <div class={`us__sport-icon sport-icon--${m.sport}`}>
+            <SportIcon sport={m.sport} size={14} />
+          </div>
+
+          <!-- Match info -->
+          <div class="us__info">
+            <div class="us__teams">
+              {m.homeTeam.split(' ')[0]}
+              <span class="us__vs">vs</span>
+              {m.awayTeam.split(' ')[0]}
+            </div>
+            <div class="us__tournament">{m.tournamentName}</div>
+          </div>
+
+          <!-- Date + role badge -->
+          <div class="us__right">
+            <span class:list={['us__date', isSoon && 'us__date--soon']}>
+              {isSoon && <span class="us__soon-dot" aria-hidden="true"></span>}
+              {dateLabel}
+            </span>
+            {m.role === 'referee' && (
+              <span class="us__role-badge">Arbitrando</span>
+            )}
+          </div>
+        </a>
+      );
+    })}
+  </div>
+</section>
+
+<style>
+.us { margin-bottom: 32px; }
+.us__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+.us__empty {
+  padding: 24px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.us__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.us__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  text-decoration: none;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.us__item:hover {
+  border-color: var(--border-hover);
+  transform: translateX(3px);
+}
+
+/* Sport icon */
+.us__sport-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sport-icon--football   { background: linear-gradient(135deg, #0a1e12, #1a4d2e); }
+.sport-icon--basketball { background: linear-gradient(135deg, #1e120a, #4d2e0a); }
+.sport-icon--tennis     { background: linear-gradient(135deg, #141e08, #2e4d0a); }
+.sport-icon--volleyball { background: linear-gradient(135deg, #08122b, #0a2e4d); }
+.sport-icon--baseball   { background: linear-gradient(135deg, #1e0a12, #4d0a2e); }
+.sport-icon--hockey     { background: linear-gradient(135deg, #0e0a1e, #1a0a4d); }
+
+.us__info { flex: 1; min-width: 0; }
+.us__teams {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.us__vs {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.us__tournament {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.us__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.us__date {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.us__date--soon { color: var(--accent); }
+.us__soon-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+}
+.us__role-badge {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 6px;
+  border: 1px solid rgba(0,229,255,.3);
+  border-radius: 3px;
+  background: var(--accent-dim);
+}
+</style>
