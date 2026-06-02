@@ -698,8 +698,8 @@ export interface PlayerProfileDetail {
 // Mock jugador multi-deporte
 export const MOCK_USER_PLAYER: PlayerProfileDetail = {
   userId: 'u3',
-  name: 'Sebastián Torres',
-  email: 'sebas@example.com',
+  name: 'Danilo Torres',
+  email: 'dani@torres.com',
   role: 'PLAYER',
   createdAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
   bio: 'Delantero y ala en baloncesto. Juego fútbol desde los 8 años y basket desde los 15.',

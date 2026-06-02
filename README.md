@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-# parches
-plataforma administradora de torneos de streaming y muchas cosas más
-=======
+
 # Parches 🏟️
 
 Plataforma de marketplace de torneos deportivos con streaming en vivo.
@@ -100,4 +97,41 @@ parches/
 ├── ios-native/            # Proyecto Xcode (árbitros)
 └── pnpm-workspace.yaml
 ```
->>>>>>> 60f1344 (feat: initial monorepo structure)
+
+## 📌 Backlog de funcionalidades futuras
+
+### Sistema de publicaciones desde perfiles
+
+Publicaciones de jugadores, árbitros y admins de torneo. Pendiente de diseño.
+
+**Tipos de contenido:**
+- Texto simple (updates del torneo, logros del jugador)
+- Texto + imagen (requiere S3/CDN para assets)
+- Video clip de jugada (requiere pipeline de transcodificación)
+- Stats automáticas post-partido (trigger en MatchEvent al cerrar partido)
+
+**Roles que publican:**
+- `PLAYER` → desde su perfil (goles, logros, actualizaciones personales)
+- `REFEREE` → eventos oficiales del partido
+- `ORGANIZER / ADMIN` → noticias del torneo
+
+**Schema Prisma a agregar cuando sea el momento:**
+```prisma
+model Post {
+  id           String    @id @default(uuid())
+  authorId     String
+  author       User      @relation(fields: [authorId], references: [id])
+  tournamentId String?   // si es post del torneo
+  matchId      String?   // si es post del partido
+  content      String
+  mediaUrl     String?   // imagen o video
+  createdAt    DateTime  @default(now())
+}
+```
+
+**Páginas web a agregar:**
+- `/feed` → feed general de publicaciones
+- `/tournaments/[slug]/feed` → publicaciones del torneo
+- `/profile` → sección de publicaciones propias
+
+**Nota:** El schema actual de Prisma NO necesita cambios previos. Este modelo se agrega directamente cuando se implemente.
