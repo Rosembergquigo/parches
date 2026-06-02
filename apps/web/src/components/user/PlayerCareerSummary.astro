@@ -1,15 +1,20 @@
 ---
 /**
- * PlayerCareerSummary.astro — resumen de carrera del jugador.
+ * PlayerCareerSummary.astro — estadísticas de carrera del jugador.
  *
- * Agrupa todas las inscripciones por deporte y suma las estadísticas.
- * Muestra un card por deporte con los totales acumulados.
+ * Un tab por deporte. Dentro de cada tab:
+ *   - Dos métricas resumen (partidos + stat principal del deporte)
+ *   - Tabla con una fila por torneo y columnas específicas del deporte
+ *   - Fila de totales al fondo
  *
- * Usa PLAYER_STAT_DEFS para saber qué métricas mostrar por deporte,
- * así es completamente genérico — no tiene lógica específica por deporte.
+ * Las columnas se derivan de PLAYER_STAT_DEFS[sport] — el componente
+ * no tiene lógica condicional por deporte.
+ *
+ * La primera stat de cada deporte se resalta como "stat principal"
+ * (goles en fútbol, puntos en basket, aces en tenis, etc.)
  */
 import SportIcon from '../ui/SportIcon.astro';
-import type { PlayerProfileDetail } from '../../data/mock';
+import type { PlayerProfileDetail, Sport } from '../../data/mock';
 import { PLAYER_STAT_DEFS } from '../../data/mock';
 
 interface Props {
@@ -18,108 +23,192 @@ interface Props {
 
 const { player } = Astro.props;
 
-// Agrupar inscripciones por deporte y acumular stats
-type SportSummary = {
-  sport: string;
+// ── Agrupar inscripciones por deporte ────────────────────
+type SportGroup = {
+  sport: Sport;
+  enrollments: typeof player.enrollments;
   totalMatches: number;
-  tournamentsCount: number;
-  teamsSet: Set<string>;
-  stats: Record<string, number>;
+  totals: Record<string, number>;
 };
 
-const summaryMap = new Map<string, SportSummary>();
+const groupMap = new Map<Sport, SportGroup>();
 
-for (const enrollment of player.enrollments) {
-  const { sport, teamId, matchesPlayed, tournamentStats } = enrollment;
-
-  if (!summaryMap.has(sport)) {
-    summaryMap.set(sport, {
-      sport,
-      totalMatches: 0,
-      tournamentsCount: 0,
-      teamsSet: new Set(),
-      stats: {},
-    });
+for (const e of player.enrollments) {
+  const sport = e.sport;
+  if (!groupMap.has(sport)) {
+    groupMap.set(sport, { sport, enrollments: [], totalMatches: 0, totals: {} });
   }
-
-  const s = summaryMap.get(sport)!;
-  s.totalMatches    += matchesPlayed;
-  s.tournamentsCount += 1;
-  s.teamsSet.add(teamId);
-
-  if (tournamentStats) {
-    for (const [key, val] of Object.entries(tournamentStats)) {
-      s.stats[key] = (s.stats[key] ?? 0) + val;
-    }
+  const g = groupMap.get(sport)!;
+  g.enrollments.push(e);
+  g.totalMatches += e.matchesPlayed;
+  for (const [k, v] of Object.entries(e.tournamentStats ?? {})) {
+    g.totals[k] = (g.totals[k] ?? 0) + v;
   }
 }
 
-const summaries = [...summaryMap.values()];
+const groups = [...groupMap.values()];
 
+// ── Helpers ──────────────────────────────────────────────
 const sportLabel: Record<string, string> = {
   football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
   volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
 };
 
-const sportBg: Record<string, string> = {
-  football:   'linear-gradient(135deg,#0a1e12,#1a4d2e)',
-  basketball: 'linear-gradient(135deg,#1e120a,#4d2e0a)',
-  tennis:     'linear-gradient(135deg,#141e08,#2e4d0a)',
-  volleyball: 'linear-gradient(135deg,#08122b,#0a2e4d)',
-  baseball:   'linear-gradient(135deg,#1e0a12,#4d0a2e)',
-  hockey:     'linear-gradient(135deg,#0e0a1e,#1a0a4d)',
+// Color del dot en el tab por deporte
+const sportDotColor: Record<string, string> = {
+  football:   '#22c55e',
+  basketball: '#f97316',
+  tennis:     '#eab308',
+  volleyball: '#3b82f6',
+  baseball:   '#ef4444',
+  hockey:     '#8b5cf6',
 };
+
+function formatStatVal(val: number, key: string): string {
+  if (key.endsWith('Pct')) return `${val}%`;
+  return String(val);
+}
+
+// Año del torneo desde el nombre (heurística simple) o "—"
+function getYear(name: string): string {
+  const m = name.match(/20\d{2}/);
+  return m ? m[0]! : '—';
+}
+
+// ID único para los tabs de esta instancia
+const uid = `pcs-${Math.random().toString(36).slice(2, 6)}`;
 ---
 
-{summaries.length > 0 && (
-  <section class="pcs" aria-label="Resumen de carrera">
-    <h2 class="pcs__title">Resumen de carrera</h2>
+{groups.length > 0 && (
+  <section class="pcs" aria-label="Estadísticas de carrera">
+    <h2 class="pcs__title">Estadísticas de carrera</h2>
 
-    <div class="pcs__grid">
-      {summaries.map(s => {
-        const defs = PLAYER_STAT_DEFS[s.sport as keyof typeof PLAYER_STAT_DEFS] ?? [];
-        return (
-          <div class="pcs__card">
-            <!-- Sport header -->
-            <div class="pcs__card-header" style={`background: ${sportBg[s.sport]}`}>
-              <div class="pcs__header-overlay" aria-hidden="true"></div>
-              <div class="pcs__header-content">
-                <div class="pcs__sport-icon">
-                  <SportIcon sport={s.sport as any} size={18} stroke="rgba(255,255,255,0.85)" />
-                </div>
-                <span class="pcs__sport-label">{sportLabel[s.sport]}</span>
-              </div>
-              <div class="pcs__header-meta">
-                <span class="pcs__meta-item">{s.totalMatches} partidos</span>
-                <span class="pcs__meta-sep">·</span>
-                <span class="pcs__meta-item">{s.tournamentsCount} torneo{s.tournamentsCount !== 1 ? 's' : ''}</span>
-                <span class="pcs__meta-sep">·</span>
-                <span class="pcs__meta-item">{s.teamsSet.size} equipo{s.teamsSet.size !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
-
-            <!-- Aggregated stats -->
-            <div class="pcs__stats">
-              {defs.map(def => (
-                <div class="pcs__stat">
-                  <span class="pcs__stat-val">
-                    {s.stats[def.key] ?? 0}
-                    {def.key.endsWith('Pct') ? '%' : ''}
-                  </span>
-                  <span class="pcs__stat-short">{def.shortLabel}</span>
-                  <span class="pcs__stat-label">{def.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+    <!-- Tab nav -->
+    <div class="pcs__tabs" role="tablist" aria-label="Deporte" id={`${uid}-tabs`}>
+      {groups.map((g, i) => (
+        <button
+          class:list={['pcs__tab', i === 0 && 'pcs__tab--active']}
+          role="tab"
+          aria-selected={i === 0 ? 'true' : 'false'}
+          aria-controls={`${uid}-panel-${g.sport}`}
+          id={`${uid}-tab-${g.sport}`}
+          data-sport={g.sport}
+          data-uid={uid}
+        >
+          <span
+            class="pcs__tab-dot"
+            style={`background: ${sportDotColor[g.sport] ?? '#888'}`}
+            aria-hidden="true"
+          ></span>
+          {sportLabel[g.sport] ?? g.sport}
+        </button>
+      ))}
     </div>
+
+    <!-- Panels -->
+    {groups.map((g, i) => {
+      const defs = PLAYER_STAT_DEFS[g.sport] ?? [];
+      const primaryDef = defs[0]; // stat principal (goles, puntos, aces...)
+
+      return (
+        <div
+          class:list={['pcs__panel', i !== 0 && 'pcs__panel--hidden']}
+          role="tabpanel"
+          id={`${uid}-panel-${g.sport}`}
+          aria-labelledby={`${uid}-tab-${g.sport}`}
+          tabindex="0"
+        >
+          <!-- Summary cards -->
+          <div class="pcs__summary">
+            <div class="pcs__sum-card">
+              <span class="pcs__sum-val">{g.totalMatches}</span>
+              <span class="pcs__sum-lbl">Partidos jugados</span>
+            </div>
+            {primaryDef && (
+              <div class="pcs__sum-card">
+                <span class="pcs__sum-val pcs__sum-val--accent">
+                  {formatStatVal(g.totals[primaryDef.key] ?? 0, primaryDef.key)}
+                </span>
+                <span class="pcs__sum-lbl">{primaryDef.label} totales</span>
+              </div>
+            )}
+          </div>
+
+          <!-- Stats table -->
+          <div class="pcs__table-wrap">
+            <table class="pcs__table" aria-label={`Estadísticas de ${sportLabel[g.sport] ?? g.sport} por torneo`}>
+              <thead>
+                <tr>
+                  <th class="col-t" scope="col">Torneo</th>
+                  <th class="col-team" scope="col">Equipo</th>
+                  <th class="col-num" scope="col" title="Dorsal">#</th>
+                  <th class="col-num" scope="col" title="Partidos jugados">PJ</th>
+                  {defs.map(def => (
+                    <th class="col-num" scope="col" title={def.label}>{def.shortLabel}</th>
+                  ))}
+                  <th class="col-status" scope="col">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- One row per tournament enrollment -->
+                {g.enrollments.map(e => (
+                  <tr class="pcs__row">
+                    <td class="col-t">
+                      <a href={`/tournaments/${e.tournamentSlug}`} class="pcs__t-link">
+                        <span class="pcs__t-name">{e.tournamentName}</span>
+                        <span class="pcs__t-year">{getYear(e.tournamentName)}</span>
+                      </a>
+                    </td>
+                    <td class="col-team">
+                      <div class="pcs__team-cell">
+                        <div class="pcs__team-logo" aria-hidden="true">{e.teamShortName}</div>
+                        <span class="pcs__team-name">{e.teamName.split(' ')[0]}</span>
+                      </div>
+                    </td>
+                    <td class="col-num pcs__jersey">
+                      {e.jerseyNumber ? `#${e.jerseyNumber}` : '—'}
+                    </td>
+                    <td class="col-num">{e.matchesPlayed}</td>
+                    {defs.map((def, di) => (
+                      <td class:list={['col-num', di === 0 && 'pcs__primary-stat']}>
+                        {formatStatVal(e.tournamentStats?.[def.key] ?? 0, def.key)}
+                      </td>
+                    ))}
+                    <td class="col-status">
+                      {e.isActive
+                        ? <span class="pcs__badge pcs__badge--active">Activo</span>
+                        : <span class="pcs__badge pcs__badge--fin">Finalizado</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+
+                <!-- Totals row -->
+                <tr class="pcs__totals-row">
+                  <td class="col-t pcs__totals-label">Total carrera</td>
+                  <td class="col-team"></td>
+                  <td class="col-num">—</td>
+                  <td class="col-num">{g.totalMatches}</td>
+                  {defs.map((def, di) => (
+                    <td class:list={['col-num', di === 0 && 'pcs__primary-stat']}>
+                      {formatStatVal(g.totals[def.key] ?? 0, def.key)}
+                    </td>
+                  ))}
+                  <td class="col-status"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      );
+    })}
   </section>
 )}
 
 <style>
 .pcs { margin-bottom: 32px; }
+
 .pcs__title {
   font-family: var(--font-display);
   font-size: 0.9rem;
@@ -130,121 +219,268 @@ const sportBg: Record<string, string> = {
   margin-bottom: 14px;
 }
 
-.pcs__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+/* ── Tabs ───────────────────────────────────────────────── */
+.pcs__tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
-
-/* Card */
-.pcs__card {
+.pcs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: border-color var(--transition), transform var(--transition);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
 }
-.pcs__card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
-
-/* Header */
-.pcs__card-header {
-  position: relative;
-  padding: 14px 16px 10px;
-  overflow: hidden;
+.pcs__tab:hover:not(.pcs__tab--active) {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-raised);
 }
-.pcs__header-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(to right, transparent 40%, rgba(0,0,0,0.35));
-  pointer-events: none;
+.pcs__tab--active {
+  background: var(--bg-raised);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
 }
-.pcs__header-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-.pcs__sport-icon {
-  width: 30px; height: 30px;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.pcs__tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
-.pcs__sport-label {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  position: relative;
-  z-index: 1;
-}
-.pcs__header-meta {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.pcs__meta-item {
-  font-family: var(--font-display);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.55);
-}
-.pcs__meta-sep { color: rgba(255,255,255,0.25); font-size: 0.6rem; }
 
-/* Stats */
-.pcs__stats {
+/* ── Panel ──────────────────────────────────────────────── */
+.pcs__panel { display: block; }
+.pcs__panel--hidden { display: none; }
+
+/* ── Summary cards ──────────────────────────────────────── */
+.pcs__summary {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-  padding: 14px 16px;
-  gap: 2px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
 }
-.pcs__stat {
+.pcs__sum-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
   text-align: center;
-  padding: 8px 4px;
-  border-radius: var(--radius-sm);
-  cursor: default;
-  transition: background var(--transition);
 }
-.pcs__stat:hover { background: var(--bg-raised); }
-
-.pcs__stat-val {
+.pcs__sum-val {
   display: block;
   font-family: var(--font-display);
-  font-size: 1.4rem;
+  font-size: 1.8rem;
   font-weight: 900;
   color: var(--text-primary);
   line-height: 1;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
-.pcs__stat-short {
-  display: block;
+.pcs__sum-val--accent { color: var(--accent); }
+.pcs__sum-lbl {
   font-family: var(--font-display);
   font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.pcs__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.pcs__table-wrap::-webkit-scrollbar { height: 3px; }
+.pcs__table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.pcs__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+thead tr { border-bottom: 1px solid var(--border); }
+thead th {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 10px;
+  white-space: nowrap;
+  text-align: center;
+}
+thead th.col-t    { text-align: left; min-width: 160px; }
+thead th.col-team { text-align: left; min-width: 120px; }
+
+/* Rows */
+.pcs__row {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.pcs__row:hover { background: var(--bg-raised); }
+
+td {
+  padding: 10px 10px;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Tournament cell */
+.col-t { text-align: left; }
+.pcs__t-link {
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pcs__t-link:hover .pcs__t-name { color: var(--accent); }
+.pcs__t-name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  transition: color var(--transition);
+}
+.pcs__t-year {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* Team cell */
+.col-team { text-align: left; }
+.pcs__team-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pcs__team-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.45rem;
+  font-weight: 900;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+.pcs__team-name {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Jersey */
+.pcs__jersey { color: var(--accent) !important; font-weight: 700 !important; }
+
+/* Primary stat column (goles, puntos...) */
+.pcs__primary-stat {
+  color: var(--text-primary) !important;
+  font-weight: 900 !important;
+  font-size: 0.92rem !important;
+}
+
+/* Status badge */
+.col-status { text-align: right; padding-right: 14px; }
+.pcs__badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--accent);
+  padding: 2px 7px;
+  border-radius: 3px;
 }
-.pcs__stat-label {
-  display: none;
-  font-family: var(--font-display);
-  font-size: 0.52rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+.pcs__badge--active {
+  color: var(--success);
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.3);
+}
+.pcs__badge--fin {
   color: var(--text-muted);
-  margin-top: 1px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
 }
-.pcs__stat:hover .pcs__stat-label { display: block; }
+
+/* Totals row */
+.pcs__totals-row {
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border);
+}
+.pcs__totals-row td {
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+.pcs__totals-label {
+  font-family: var(--font-display);
+  font-size: 0.75rem !important;
+  font-style: italic;
+  color: var(--text-secondary) !important;
+  font-weight: 600 !important;
+}
+
+@media (max-width: 640px) {
+  .pcs__summary { grid-template-columns: 1fr 1fr; }
+}
 </style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.pcs__tabs').forEach(nav => {
+    const uid = nav.id.replace('-tabs', '');
+    const tabs   = nav.querySelectorAll<HTMLButtonElement>('.pcs__tab');
+    const panels = document.querySelectorAll<HTMLElement>(`[id^="${uid}-panel-"]`);
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.classList.remove('pcs__tab--active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        panels.forEach(p => p.classList.add('pcs__panel--hidden'));
+
+        tab.classList.add('pcs__tab--active');
+        tab.setAttribute('aria-selected', 'true');
+        const sport = tab.dataset.sport!;
+        document.getElementById(`${uid}-panel-${sport}`)?.classList.remove('pcs__panel--hidden');
+      });
+    });
+  });
+</script>

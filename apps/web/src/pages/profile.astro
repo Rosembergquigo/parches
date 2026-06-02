@@ -17,7 +17,6 @@ import UserSchedule   from '../components/user/UserSchedule.astro';
 import UserHistory    from '../components/user/UserHistory.astro';
 import PlayerProfileHeader  from '../components/user/PlayerProfileHeader.astro';
 import PlayerCareerSummary  from '../components/user/PlayerCareerSummary.astro';
-import PlayerEnrollmentCard from '../components/user/PlayerEnrollmentCard.astro';
 import { requireAuth } from '../lib/auth';
 import {
   MOCK_USER_VIEWER,
@@ -44,10 +43,6 @@ const isViewer  = DEMO_ROLE === 'VIEWER';
 const viewerUser  = MOCK_USER_VIEWER;
 const refereeUser = MOCK_USER_REFEREE;
 const playerUser  = MOCK_USER_PLAYER;
-
-// Separar inscripciones activas e históricas para el jugador
-const activeEnrollments   = playerUser.enrollments.filter(e => e.isActive);
-const historicEnrollments = playerUser.enrollments.filter(e => !e.isActive);
 ---
 
 <Base
@@ -62,31 +57,7 @@ const historicEnrollments = playerUser.enrollments.filter(e => !e.isActive);
       <PlayerProfileHeader player={playerUser} isOwn={true} />
       <main class="profile-page">
         <div class="profile-page__inner">
-
           <PlayerCareerSummary player={playerUser} />
-
-          {activeEnrollments.length > 0 && (
-            <section aria-label="Equipos activos" class="enr-section">
-              <h2 class="enr-section__title">Equipos activos</h2>
-              <div class="enr-grid">
-                {activeEnrollments.map(e => (
-                  <PlayerEnrollmentCard enrollment={e} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {historicEnrollments.length > 0 && (
-            <section aria-label="Historial de equipos" class="enr-section">
-              <h2 class="enr-section__title">Historial de equipos</h2>
-              <div class="enr-grid">
-                {historicEnrollments.map(e => (
-                  <PlayerEnrollmentCard enrollment={e} />
-                ))}
-              </div>
-            </section>
-          )}
-
         </div>
       </main>
     </>
