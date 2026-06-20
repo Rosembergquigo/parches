@@ -4,85 +4,172 @@
  * SVG inline por deporte. Sin fuentes de iconos externas.
  * Recibe size en px y color como stroke color.
  */
-import type { Sport } from '../../data/mock';
+import type { Sport } from "../../data/mock";
 
 interface Props {
-  sport: Sport | 'all';
+  sport: Sport | "all";
   size?: number;
   stroke?: string;
   class?: string;
 }
 
-const { sport, size = 20, stroke = 'rgba(255,255,255,0.7)', class: cls = '' } = Astro.props;
+const {
+  sport,
+  size = 40,
+  stroke = "rgba(255,255,255,0.7)",
+  class: cls = "",
+} = Astro.props;
 const s = size;
 ---
 
-{sport === 'all' && (
-  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={stroke}
-    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class={cls} aria-hidden="true">
-    <rect x="3" y="3" width="7" height="7" rx="1"/>
-    <rect x="14" y="3" width="7" height="7" rx="1"/>
-    <rect x="3" y="14" width="7" height="7" rx="1"/>
-    <rect x="14" y="14" width="7" height="7" rx="1"/>
-  </svg>
-)}
+{
+  sport === "all" && (
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={stroke}
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={cls}
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
 
-{sport === 'football' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <polygon points="16,8 19.5,13 25,13 21,17.5 23,23 16,19 9,23 11,17.5 7,13 12.5,13"
-      fill="rgba(255,255,255,0.1)" stroke={stroke} stroke-width="1"/>
-  </svg>
-)}
+{
+  sport === "football" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/0fbcaa30-f449-45d2-9978-5bcefc5b88ae/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
 
-{sport === 'basketball' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <path d="M3 16h26"/>
-    <path d="M16 3a18 18 0 0 1 0 26"/>
-    <path d="M16 3a18 18 0 0 0 0 26"/>
-  </svg>
-)}
+{
+  sport === "basketball" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/d3fc211f-0d55-4f27-bd37-4d61fa618ba8/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
 
-{sport === 'tennis' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <path d="M6 8a10 10 0 0 1 0 16"/>
-    <path d="M26 8a10 10 0 0 0 0 16"/>
-  </svg>
-)}
+{
+  sport === "tennis" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/b7f781a4-31e8-47df-9a76-4d30d52cbdf6/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
 
-{sport === 'volleyball' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <path d="M16 3c4 4 4 10 0 14"/>
-    <path d="M16 3c-4 4-4 10 0 14"/>
-    <path d="M3 14c4 2 10 2 14-1"/>
-    <path d="M16 17c4 4 10 4 13 2"/>
-  </svg>
-)}
+{
+  sport === "volleyball" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/3d20fe90-cc57-41fe-9b27-230ce32d65d3/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
 
-{sport === 'baseball' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <path d="M10 5.5c2 4 2 17 0 21"/>
-    <path d="M22 5.5c-2 4-2 17 0 21"/>
-    <path d="M6 11c4 2 16 2 20 0"/>
-    <path d="M6 21c4-2 16-2 20 0"/>
-  </svg>
-)}
+{
+  sport === "baseball" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/707c9808-5c98-4da7-9cf8-a1d522563be3/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
 
-{sport === 'hockey' && (
-  <svg width={s} height={s} viewBox="0 0 32 32" fill="none" stroke={stroke}
-    stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class={cls} aria-hidden="true">
-    <circle cx="16" cy="16" r="13"/>
-    <path d="M10 10 L22 10 L22 18 Q22 22 16 22 Q10 22 10 18 Z" fill="rgba(255,255,255,0.08)"/>
-    <path d="M13 10 L13 19"/>
-    <path d="M19 10 L19 19"/>
-  </svg>
-)}
+{
+  sport === "hockey" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/54fe410e-55af-405c-9644-a48d6482d777/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
+
+{
+  sport === "motor" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/56935400-7afa-492a-b091-158edf3ea036/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
+
+{
+  sport === "padel" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/56935400-7afa-492a-b091-158edf3ea036/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
+
+{
+  sport === "boxeo" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/869a5151-774a-4183-bbc1-89911be31d36/compose?format=webp&label=logo_round_100&width=800"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}
+
+{
+  sport === "eSports" && (
+    <img
+      src="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/e484e8eb-4504-4e5c-93ff-d1e3826aa677/compose?format=webp&label=logo_round_100&w"
+      alt=""
+      aria-hidden="true"
+      width={s}
+      height={s}
+      class={cls}
+    />
+  )
+}

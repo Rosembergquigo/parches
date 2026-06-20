@@ -52,7 +52,7 @@ const tabs: (Sport | 'all')[] = ['all', ...sports];
     >
       <div class="stab__img">
         <div class:list={['stab__bg', BG_CLASS[sport]]}>
-          <SportIcon sport={sport} size={22} />
+          <SportIcon sport={sport} size={40} />
         </div>
       </div>
       <span class="stab__label">{LABELS[sport]}</span>
@@ -89,8 +89,8 @@ const tabs: (Sport | 'all')[] = ['all', ...sports];
 /* Image container */
 .stab__img {
   width: 72px;
-  height: 50px;
-  border-radius: var(--radius-md);
+  height: 72px;
+  border-radius: 100%;
   border: 2px solid transparent;
   overflow: hidden;
   transition: border-color var(--transition);
