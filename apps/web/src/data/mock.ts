@@ -9,7 +9,7 @@
  *   prisma.tournament.findMany({ include: { matches: { include: { homeTeam, awayTeam } } } })
  */
 
-export type Sport = 'football' | 'basketball' | 'tennis' | 'volleyball' | 'baseball' | 'hockey';
+export type Sport = 'football' | 'basketball' | 'tennis' | 'volleyball' | 'baseball' | 'hockey' | 'motor' | 'padel' | 'eSports' | 'boxeo';
 export type MatchStatus = 'LIVE' | 'SCHEDULED' | 'FINISHED';
 export type TournamentStatus = 'LIVE' | 'UPCOMING' | 'FINISHED';
 
