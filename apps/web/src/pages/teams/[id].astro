@@ -1,0 +1,49 @@
+---
+/**
+ * pages/teams/[id].astro — placeholder de página de equipo.
+ *
+ * Por ahora redirige al torneo correspondiente.
+ * Cuando se implemente la página real del equipo, se reemplaza
+ * este archivo con el contenido completo.
+ *
+ * El mock mapea teamId → { tournamentSlug } para construir
+ * la URL de destino. En producción vendría del API:
+ *   GET /teams/:id → { tournamentSlug, ... }
+ *
+ * Documentado en backlog: página de equipo completa con
+ * plantilla, jugadores, historial de partidos.
+ */
+
+// Mock: mapa de equipos conocidos → torneo
+const TEAM_TOURNAMENT_MAP: Record<string, string> = {
+  med:  'liga-betplay-2025',
+  mil:  'liga-betplay-2025',
+  ame:  'liga-betplay-2025',
+  jun:  'liga-betplay-2025',
+  nal:  'liga-betplay-2025',
+  cal:  'liga-betplay-2025',
+  san:  'liga-betplay-2025',
+  pas:  'liga-betplay-2025',
+  buc:  'lnb-2025',
+  pir:  'lnb-2025',
+  coc:  'lnb-2025',
+  vaq:  'lnb-2025',
+  cab:  'copa-davis-col-2025',
+  gar:  'copa-davis-col-2025',
+  col:  'sudamericano-voleibol-2025',
+  bra:  'sudamericano-voleibol-2025',
+  cai:  'lpb-playoffs-2025',
+  tor:  'lpb-playoffs-2025',
+};
+
+const { id } = Astro.params;
+const tournamentSlug = TEAM_TOURNAMENT_MAP[id!.toLowerCase()];
+
+// Si conocemos el equipo → redirigir al torneo
+if (tournamentSlug) {
+  return Astro.redirect(`/tournaments/${tournamentSlug}`, 302);
+}
+
+// Si no lo conocemos → redirigir al marketplace
+return Astro.redirect('/', 302);
+---

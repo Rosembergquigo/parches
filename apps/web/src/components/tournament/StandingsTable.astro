@@ -68,10 +68,10 @@ const isBasket = sport === 'basketball';
                 </span>
               </td>
               <td class="col-team">
-                <div class="team-cell">
+                <a href={`/teams/${row.team.id}`} class="team-cell-link" aria-label={`Ver equipo ${row.team.name}`}>
                   <div class="team-logo" aria-hidden="true">{row.team.shortName}</div>
                   <span class="team-name">{row.team.name}</span>
-                </div>
+                </a>
               </td>
               <td class="col-num">{row.played}</td>
               <td class="col-num col-win">{row.won}</td>
@@ -224,6 +224,15 @@ thead .col-team { text-align: left; }
   align-items: center;
   gap: 9px;
 }
+.team-cell-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  transition: opacity var(--transition);
+}
+.team-cell-link:hover { opacity: 0.75; }
+.team-cell-link:hover .team-name { color: var(--accent); }
 .team-logo {
   width: 24px;
   height: 24px;

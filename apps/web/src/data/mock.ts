@@ -231,6 +231,7 @@ export interface PlayerStat {
   position: number;
   playerName: string;
   playerShortName: string;   // iniciales para el avatar placeholder
+  userId?: string;           // si está presente, el nombre linkea a /users/[id]
   team: TeamSnippet;
   statValue: number;
   statLabel?: string;        // texto auxiliar debajo del valor
@@ -280,14 +281,14 @@ export const MOCK_TOURNAMENT_BETPLAY: TournamentDetail = {
       tabLabel: 'Goleadores',
       colHeader: 'Goles',
       rows: [
-        { position: 1, playerName: 'Adrián Ramos',     playerShortName: 'AR', team: { id: 'ame', name: 'América de Cali',          shortName: 'AME' }, statValue: 12, statLabel: '17 partidos' },
-        { position: 2, playerName: 'Dayro Moreno',     playerShortName: 'DM', team: { id: 'nal', name: 'Atlético Nacional',          shortName: 'NAL' }, statValue: 11, statLabel: '16 partidos' },
-        { position: 3, playerName: 'Leonardo Castro',  playerShortName: 'LC', team: { id: 'mil', name: 'Millonarios FC',             shortName: 'MIL' }, statValue: 9,  statLabel: '17 partidos' },
-        { position: 4, playerName: 'Rodrigo Ureña',    playerShortName: 'RU', team: { id: 'med', name: 'Independiente Medellín',     shortName: 'MED' }, statValue: 8,  statLabel: '15 partidos' },
-        { position: 5, playerName: 'Wilson Morelo',    playerShortName: 'WM', team: { id: 'san', name: 'Santa Fe',                  shortName: 'SAN' }, statValue: 7,  statLabel: '17 partidos' },
-        { position: 6, playerName: 'Jhon Córdoba',     playerShortName: 'JC', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 6,  statLabel: '14 partidos' },
-        { position: 7, playerName: 'Marco Pérez',      playerShortName: 'MP', team: { id: 'cal', name: 'Deportivo Cali',            shortName: 'CAL' }, statValue: 5,  statLabel: '17 partidos' },
-        { position: 8, playerName: 'Carlos Bacca',     playerShortName: 'CB', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 5,  statLabel: '16 partidos' },
+        { position: 1, playerName: 'Adrián Ramos',     playerShortName: 'AR', userId: undefined,  team: { id: 'ame', name: 'América de Cali',      shortName: 'AME' }, statValue: 12, statLabel: '17 partidos' },
+        { position: 2, playerName: 'Dayro Moreno',     playerShortName: 'DM', userId: undefined,  team: { id: 'nal', name: 'Atlético Nacional',     shortName: 'NAL' }, statValue: 11, statLabel: '16 partidos' },
+        { position: 3, playerName: 'Leonardo Castro',  playerShortName: 'LC', userId: undefined,  team: { id: 'mil', name: 'Millonarios FC',         shortName: 'MIL' }, statValue: 9,  statLabel: '17 partidos' },
+        { position: 4, playerName: 'Danilo Torres',    playerShortName: 'ST', userId: 'u3',       team: { id: 'med', name: 'Independiente Medellín', shortName: 'MED' }, statValue: 7,  statLabel: '14 partidos' },
+        { position: 5, playerName: 'Wilson Morelo',    playerShortName: 'WM', userId: undefined,  team: { id: 'san', name: 'Santa Fe',              shortName: 'SAN' }, statValue: 7,  statLabel: '17 partidos' },
+        { position: 6, playerName: 'Jhon Córdoba',     playerShortName: 'JC', userId: undefined,  team: { id: 'jun', name: 'Junior FC',              shortName: 'JUN' }, statValue: 6,  statLabel: '14 partidos' },
+        { position: 7, playerName: 'Marco Pérez',      playerShortName: 'MP', userId: undefined,  team: { id: 'cal', name: 'Deportivo Cali',         shortName: 'CAL' }, statValue: 5,  statLabel: '17 partidos' },
+        { position: 8, playerName: 'Carlos Bacca',     playerShortName: 'CB', userId: undefined,  team: { id: 'jun', name: 'Junior FC',              shortName: 'JUN' }, statValue: 5,  statLabel: '16 partidos' },
       ],
     },
     {
@@ -295,12 +296,12 @@ export const MOCK_TOURNAMENT_BETPLAY: TournamentDetail = {
       tabLabel: 'Valla menos vencida',
       colHeader: 'Vallas',
       rows: [
-        { position: 1, playerName: 'Aldair Quintana',  playerShortName: 'AQ', team: { id: 'nal', name: 'Atlético Nacional',          shortName: 'NAL' }, statValue: 9,  statLabel: '3 goles en contra' },
-        { position: 2, playerName: 'Álvaro Montero',   playerShortName: 'AM', team: { id: 'mil', name: 'Millonarios FC',             shortName: 'MIL' }, statValue: 8,  statLabel: '5 goles en contra' },
-        { position: 3, playerName: 'David González',   playerShortName: 'DG', team: { id: 'med', name: 'Independiente Medellín',     shortName: 'MED' }, statValue: 8,  statLabel: '6 goles en contra' },
-        { position: 4, playerName: 'Joel Graterol',    playerShortName: 'JG', team: { id: 'san', name: 'Santa Fe',                  shortName: 'SAN' }, statValue: 7,  statLabel: '7 goles en contra' },
-        { position: 5, playerName: 'Sebastián Viera',  playerShortName: 'SV', team: { id: 'jun', name: 'Junior FC',                 shortName: 'JUN' }, statValue: 6,  statLabel: '9 goles en contra' },
-        { position: 6, playerName: 'Neto Volpi',       playerShortName: 'NV', team: { id: 'ame', name: 'América de Cali',          shortName: 'AME' }, statValue: 5,  statLabel: '11 goles en contra' },
+        { position: 1, playerName: 'Aldair Quintana',  playerShortName: 'AQ', userId: undefined, team: { id: 'nal', name: 'Atlético Nacional',      shortName: 'NAL' }, statValue: 9,  statLabel: '3 goles en contra'  },
+        { position: 2, playerName: 'Álvaro Montero',   playerShortName: 'AM', userId: undefined, team: { id: 'mil', name: 'Millonarios FC',          shortName: 'MIL' }, statValue: 8,  statLabel: '5 goles en contra'  },
+        { position: 3, playerName: 'David González',   playerShortName: 'DG', userId: undefined, team: { id: 'med', name: 'Independiente Medellín',  shortName: 'MED' }, statValue: 8,  statLabel: '6 goles en contra'  },
+        { position: 4, playerName: 'Joel Graterol',    playerShortName: 'JG', userId: undefined, team: { id: 'san', name: 'Santa Fe',               shortName: 'SAN' }, statValue: 7,  statLabel: '7 goles en contra'  },
+        { position: 5, playerName: 'Sebastián Viera',  playerShortName: 'SV', userId: undefined, team: { id: 'jun', name: 'Junior FC',               shortName: 'JUN' }, statValue: 6,  statLabel: '9 goles en contra'  },
+        { position: 6, playerName: 'Neto Volpi',       playerShortName: 'NV', userId: undefined, team: { id: 'ame', name: 'América de Cali',         shortName: 'AME' }, statValue: 5,  statLabel: '11 goles en contra' },
       ],
     },
   ],
@@ -608,6 +609,7 @@ export const MOCK_USER_HISTORY: HistoryMatchItem[] = [
 export function getMockUserById(id: string): UserProfile | null {
   if (id === 'u1') return MOCK_USER_VIEWER;
   if (id === 'u2') return MOCK_USER_REFEREE;
+  if (id === 'u3') return MOCK_USER_PLAYER;
   return null;
 }
 
@@ -679,7 +681,7 @@ export const PLAYER_STAT_DEFS: Record<Sport, PlayerStatDef[]> = {
 };
 
 export interface PlayerProfileDetail {
-  userId: string;
+  id: string;
   name: string;
   email: string;
   role: 'PLAYER';
@@ -697,9 +699,9 @@ export interface PlayerProfileDetail {
 
 // Mock jugador multi-deporte
 export const MOCK_USER_PLAYER: PlayerProfileDetail = {
-  userId: 'u3',
+  id: 'u3',
   name: 'Danilo Torres',
-  email: 'dani@torres.com',
+  email: 'danilo@example.com',
   role: 'PLAYER',
   createdAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
   bio: 'Delantero y ala en baloncesto. Juego fútbol desde los 8 años y basket desde los 15.',
