@@ -1,4 +1,3 @@
-
 # Parches 🏟️
 
 Plataforma de marketplace de torneos deportivos con streaming en vivo.
@@ -98,6 +97,8 @@ parches/
 └── pnpm-workspace.yaml
 ```
 
+---
+
 ## 📌 Backlog de funcionalidades futuras
 
 ### Sistema de publicaciones desde perfiles
@@ -135,3 +136,12 @@ model Post {
 - `/profile` → sección de publicaciones propias
 
 **Nota:** El schema actual de Prisma NO necesita cambios previos. Este modelo se agrega directamente cuando se implemente.
+
+### Página del equipo `/teams/[id]`
+
+Actualmente `/teams/[id]` redirige al torneo correspondiente (302).
+Página real pendiente de implementar con:
+- Plantilla del equipo (formación, jugadores con posición y dorsal)
+- Historial de partidos del equipo en todos los torneos
+- Estadísticas del equipo (goles a favor/en contra, posesión promedio)
+- Lista de jugadores con link a `/users/[id]`

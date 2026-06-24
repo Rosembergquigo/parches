@@ -91,23 +91,43 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
 
                 <!-- Player -->
                 <td class="col-player">
-                  <div class="player-cell">
-                    <div
-                      class="player-avatar"
-                      aria-hidden="true"
-                      style={row.position <= 3
-                        ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
-                        : ''}
-                    >
-                      {row.playerShortName}
+                  {row.userId ? (
+                    <a href={`/users/${row.userId}`} class="player-cell player-cell--link" aria-label={`Ver perfil de ${row.playerName}`}>
+                      <div
+                        class="player-avatar"
+                        aria-hidden="true"
+                        style={row.position <= 3
+                          ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
+                          : ''}
+                      >
+                        {row.playerShortName}
+                      </div>
+                      <div class="player-info">
+                        <span class="player-name player-name--link">{row.playerName}</span>
+                        {row.statLabel && (
+                          <span class="player-sublabel">{row.statLabel}</span>
+                        )}
+                      </div>
+                    </a>
+                  ) : (
+                    <div class="player-cell">
+                      <div
+                        class="player-avatar"
+                        aria-hidden="true"
+                        style={row.position <= 3
+                          ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
+                          : ''}
+                      >
+                        {row.playerShortName}
+                      </div>
+                      <div class="player-info">
+                        <span class="player-name">{row.playerName}</span>
+                        {row.statLabel && (
+                          <span class="player-sublabel">{row.statLabel}</span>
+                        )}
+                      </div>
                     </div>
-                    <div class="player-info">
-                      <span class="player-name">{row.playerName}</span>
-                      {row.statLabel && (
-                        <span class="player-sublabel">{row.statLabel}</span>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </td>
 
                 <!-- Team -->
@@ -269,6 +289,13 @@ thead .col-stat  { text-align: center; }
   align-items: center;
   gap: 10px;
 }
+.player-cell--link {
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition);
+}
+.player-cell--link:hover { opacity: 0.75; }
+.player-cell--link:hover .player-name { color: var(--accent); }
 .player-avatar {
   width: 30px;
   height: 30px;
@@ -298,7 +325,9 @@ thead .col-stat  { text-align: center; }
   text-transform: uppercase;
   color: var(--text-primary);
   white-space: nowrap;
+  transition: color var(--transition);
 }
+.player-name--link { color: var(--text-primary); }
 .player-sublabel {
   font-family: var(--font-display);
   font-size: 0.58rem;
