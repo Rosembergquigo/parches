@@ -48,7 +48,9 @@ const metaParts = [
         <SportIcon sport={sport} size={16} />
       </div>
       <div class="t-row__info">
-        <h2 class="t-row__name">{name}</h2>
+        <a href={`/tournaments/${slug}`} class="t-row__name-link" aria-label={`Ver torneo ${name}`}>
+          <h2 class="t-row__name">{name}</h2>
+        </a>
         <p class="t-row__meta">{metaParts}</p>
       </div>
     </div>

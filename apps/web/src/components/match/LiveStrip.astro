@@ -54,10 +54,21 @@ if (matches.length === 0) return;
         </div>
 
         <!-- Teams + scores -->
-        <div class="lsc__match">
+        <!--div class="lsc__match">
           <span class="lsc__team">{m.homeTeam.name.split(' ')[0]}</span>
           <span class="lsc__score">{m.homeScore}—{m.awayScore}</span>
           <span class="lsc__team lsc__team--right">{m.awayTeam.name.split(' ')[0]}</span>
+        </div>-->
+        <div class="mc__body">
+          <div class="mc__team-row">
+            <div class="mc__name">{m.homeTeam.name.split(' ')[0]}</div>
+            <div class="mc__score">{m.homeScore}</div>
+          </div>
+          <div class="mc__divider"></div>
+          <div class="mc__team-row">
+            <div class="mc__name">{m.awayTeam.name.split(' ')[0]}</div>
+            <div class="mc__score">{m.awayScore}</div>
+          </div>
         </div>
 
         <!-- Tournament -->
@@ -228,5 +239,61 @@ if (matches.length === 0) return;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mc__body {
+  padding: 10px 12px 6px;
+}
+.mc__team-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.mc__team-row:last-of-type { margin-bottom: 0; }
+
+.mc__logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.mc__name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc__score {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  min-width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.mc__score--win { color: var(--accent); }
+
+.mc__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
 }
 </style>
