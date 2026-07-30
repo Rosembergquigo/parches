@@ -1,0 +1,146 @@
+---
+/**
+ * TeamSquad.astro — plantilla del equipo.
+ * Nombre linkea a /users/[userId] cuando hay perfil.
+ */
+import type { TeamPlayer } from '../../data/mock';
+
+interface Props {
+  players: TeamPlayer[];
+}
+
+const { players } = Astro.props;
+---
+
+<div class="squad">
+  <h2 class="squad__title">Plantilla</h2>
+
+  {players.length === 0 && (
+    <p class="squad__empty">Sin jugadores registrados</p>
+  )}
+
+  {players.length > 0 && (
+    <div class="squad__table-wrap">
+      <table class="squad__table" aria-label="Plantilla del equipo">
+        <thead>
+          <tr>
+            <th class="col-num" scope="col">#</th>
+            <th class="col-player" scope="col">Jugador</th>
+            <th class="col-pos" scope="col">Posición</th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map(p => (
+            <tr>
+              <td class="col-num">{p.jerseyNumber ?? '—'}</td>
+              <td class="col-player">
+                <div class="player-cell">
+                  <span class="player-avatar" aria-hidden="true">{p.shortName}</span>
+                  {p.userId ? (
+                    <a href={`/users/${p.userId}`} class="player-name player-name--link">
+                      {p.name}
+                    </a>
+                  ) : (
+                    <span class="player-name">{p.name}</span>
+                  )}
+                </div>
+              </td>
+              <td class="col-pos">{p.position ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+
+<style>
+.squad {
+  padding: 0 24px;
+  margin-bottom: 32px;
+}
+.squad__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.squad__empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 20px 0;
+}
+.squad__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.squad__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+}
+.squad__table th {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.squad__table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+.squad__table tr:last-child td { border-bottom: none; }
+.col-num {
+  width: 48px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-secondary);
+}
+.col-pos {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.player-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.player-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.player-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.player-name--link {
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.player-name--link:hover { color: var(--accent); }
+</style>

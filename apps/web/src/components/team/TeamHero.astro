@@ -1,0 +1,228 @@
+---
+/**
+ * TeamHero.astro — header de la página de equipo.
+ * Misma lengua visual que TournamentHero (breadcrumb, logo, badges).
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import type { TeamDetail } from '../../data/mock';
+
+interface Props {
+  team: TeamDetail;
+}
+
+const { team } = Astro.props;
+const { name, shortName, sport, tournamentName, tournamentSlug, brandColor, standing, logoUrl } = team;
+
+const sportGradient: Record<string, string> = {
+  football:   'linear-gradient(135deg, #0a1e12 0%, #0d2b1a 50%, #0a0c0f 100%)',
+  basketball: 'linear-gradient(135deg, #1e120a 0%, #2b1a08 50%, #0a0c0f 100%)',
+  tennis:     'linear-gradient(135deg, #141e08 0%, #1e2f0a 50%, #0a0c0f 100%)',
+  volleyball: 'linear-gradient(135deg, #08122b 0%, #0d1e40 50%, #0a0c0f 100%)',
+  baseball:   'linear-gradient(135deg, #1e0a12 0%, #2b0d1a 50%, #0a0c0f 100%)',
+  hockey:     'linear-gradient(135deg, #0e0a1e 0%, #160d2e 50%, #0a0c0f 100%)',
+};
+
+const bgGradient = brandColor
+  ? `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}11 45%, #0a0c0f 100%)`
+  : (sportGradient[sport] ?? sportGradient.football);
+
+const logoBg = brandColor ?? '#1e232b';
+const isLight = brandColor ? parseInt(brandColor.slice(1), 16) > 0x888888 : false;
+const logoTextColor = brandColor && isLight ? '#000' : '#fff';
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
+  volleyball: 'Voleibol', baseball: 'Béisbol', hockey: 'Hockey',
+};
+---
+
+<div class="team-hero" style={`background: ${bgGradient}`}>
+  <div class="team-hero__grid" aria-hidden="true"></div>
+  <div class="team-hero__fade" aria-hidden="true"></div>
+
+  <div class="team-hero__content">
+    <nav class="team-hero__breadcrumb" aria-label="Navegación de migas">
+      <a href="/">Inicio</a>
+      <span aria-hidden="true">›</span>
+      <a href={`/tournaments/${tournamentSlug}`}>{tournamentName}</a>
+      <span aria-hidden="true">›</span>
+      <span aria-current="page">{name}</span>
+    </nav>
+
+    <div class="team-hero__main">
+      {logoUrl ? (
+        <img src={logoUrl} alt={`Logo ${name}`} class="team-hero__logo-img" width="56" height="56" />
+      ) : (
+        <div
+          class="team-hero__logo"
+          style={`background: ${logoBg}33; border-color: ${logoBg}55;`}
+          aria-hidden="true"
+        >
+          <span style={`color: ${logoTextColor}`}>{shortName}</span>
+        </div>
+      )}
+
+      <div class="team-hero__info">
+        <div class="team-hero__badges">
+          <span
+            class="team-hero__sport"
+            style={brandColor
+              ? `color:${brandColor}; border-color:${brandColor}44; background:${brandColor}14;`
+              : ''}
+          >
+            <SportIcon sport={sport} size={12} stroke={brandColor ?? 'var(--accent)'} />
+            {sportLabel[sport] ?? sport}
+          </span>
+          {standing && (
+            <span class="team-hero__pos" style={brandColor ? `color:${brandColor}` : ''}>
+              #{standing.position} · {standing.points} PTS
+            </span>
+          )}
+        </div>
+        <h1 class="team-hero__name">{name}</h1>
+        <p class="team-hero__tournament">
+          <a href={`/tournaments/${tournamentSlug}`}>{tournamentName}</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.team-hero {
+  position: relative;
+  min-height: 180px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.team-hero__grid {
+  position: absolute; inset: 0;
+  opacity: 0.03;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.8) 39px, rgba(255,255,255,.8) 40px);
+  pointer-events: none;
+}
+.team-hero__fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(10,12,15,0.95) 0%, transparent 60%);
+  pointer-events: none;
+}
+.team-hero__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 28px 24px;
+}
+.team-hero__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.team-hero__breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.team-hero__breadcrumb a:hover { color: var(--text-primary); }
+.team-hero__breadcrumb [aria-current] { color: var(--text-primary); }
+
+.team-hero__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.team-hero__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.team-hero__logo span {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.team-hero__logo-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: contain;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.team-hero__info { flex: 1; min-width: 0; }
+.team-hero__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.team-hero__sport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid rgba(0,229,255,.3);
+  border-radius: 3px;
+  background: rgba(0,229,255,.08);
+}
+.team-hero__pos {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.team-hero__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3.5vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1.05;
+  margin-bottom: 6px;
+}
+.team-hero__tournament {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.team-hero__tournament a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--transition);
+}
+.team-hero__tournament a:hover { color: var(--text-primary); }
+</style>

@@ -255,9 +255,15 @@ export interface StatConfig {
   rows: PlayerStat[];
 }
 
+export interface TournamentPolicies {
+  /** When true, Fixture shows an internal Playoffs mode with bracket map. */
+  playoffs: boolean;
+}
+
 export interface TournamentDetail extends TournamentWithMatches {
   description?: string;
   standings?: StandingsRow[];
+  /** Regular-season / jornada groups for the Fixture section. */
   groups?: MatchGroup[];
   /**
    * Estadísticas de jugadores organizadas por tab.
@@ -267,6 +273,13 @@ export interface TournamentDetail extends TournamentWithMatches {
   playerStats?: StatConfig[];
   brandColor?: string;
   logoUrl?: string;
+  /**
+   * Tournament feature flags (politicas).
+   * `playoffs: true` unlocks the Playoffs mode inside Fixture (bracket map).
+   */
+  policies?: TournamentPolicies;
+  /** Knockout rounds for the bracket — only used when policies.playoffs === true. */
+  playoffGroups?: MatchGroup[];
 }
 
 // Detailed mock for Liga BetPlay
@@ -325,13 +338,98 @@ export const MOCK_TOURNAMENT_BETPLAY: TournamentDetail = {
       matches: MOCK_TOURNAMENTS[0]!.matches.filter(m => m.status === 'FINISHED'),
     },
   ],
+  // Política: este torneo tiene fase de playoffs / cuadrangulares
+  policies: { playoffs: true },
+  playoffGroups: [
+    {
+      label: 'Cuadrangulares — Semifinales',
+      matches: [
+        {
+          id: 'po-sf1',
+          homeTeam: { id: 'nal', name: 'Atlético Nacional', shortName: 'NAL' },
+          awayTeam: { id: 'san', name: 'Santa Fe', shortName: 'SAN' },
+          homeScore: 0, awayScore: 0,
+          status: 'SCHEDULED',
+          clock: '−',
+          period: 'Ida',
+          scheduledAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          venue: 'Est. Atanasio Girardot',
+        },
+        {
+          id: 'po-sf2',
+          homeTeam: { id: 'mil', name: 'Millonarios FC', shortName: 'MIL' },
+          awayTeam: { id: 'med', name: 'Independiente Medellín', shortName: 'MED' },
+          homeScore: 0, awayScore: 0,
+          status: 'SCHEDULED',
+          clock: '−',
+          period: 'Ida',
+          scheduledAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          venue: 'Est. El Campín',
+        },
+      ],
+    },
+    {
+      label: 'Final',
+      matches: [
+        {
+          id: 'po-final',
+          homeTeam: { id: 'nal', name: 'Atlético Nacional', shortName: 'NAL' },
+          awayTeam: { id: 'mil', name: 'Millonarios FC', shortName: 'MIL' },
+          homeScore: 0, awayScore: 0,
+          status: 'SCHEDULED',
+          clock: '−',
+          period: 'Por definir',
+          scheduledAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          venue: 'Por definir',
+        },
+      ],
+    },
+  ],
 };
 
 export function getMockTournamentBySlug(slug: string): TournamentDetail | null {
   if (slug === 'liga-betplay-2025') return MOCK_TOURNAMENT_BETPLAY;
   const found = MOCK_TOURNAMENTS.find(t => t.slug === slug);
   if (!found) return null;
-  return { ...found, groups: [{ label: 'Partidos', matches: found.matches }] };
+
+  // Tournaments that are playoff-only: policy on, matches live under Playoffs
+  const isPlayoffTournament =
+    found.slug === 'lpb-playoffs-2025' || found.slug === 'lnb-2025';
+
+  if (isPlayoffTournament) {
+    // Build a small bracket map: first matches as semis, TBD final when needed
+    const semis = found.matches;
+    const playoffGroups: MatchGroup[] = [
+      { label: found.stage ?? 'Semifinales', matches: semis },
+    ];
+    if (semis.length >= 2) {
+      playoffGroups.push({
+        label: 'Final',
+        matches: [{
+          id: `${found.id}-final`,
+          homeTeam: { id: 'tbd-a', name: 'Por definir', shortName: 'TBD' },
+          awayTeam: { id: 'tbd-b', name: 'Por definir', shortName: 'TBD' },
+          homeScore: 0,
+          awayScore: 0,
+          status: 'SCHEDULED',
+          period: 'Ganadores semis',
+          scheduledAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        }],
+      });
+    }
+    return {
+      ...found,
+      policies: { playoffs: true },
+      groups: undefined,
+      playoffGroups,
+    };
+  }
+
+  return {
+    ...found,
+    policies: { playoffs: false },
+    groups: [{ label: 'Partidos', matches: found.matches }],
+  };
 }
 
 // ── Match detail ──────────────────────────────────────────
@@ -760,5 +858,238 @@ export const MOCK_USER_PLAYER: PlayerProfileDetail = {
 
 export function getMockPlayerById(userId: string): PlayerProfileDetail | null {
   if (userId === 'u3') return MOCK_USER_PLAYER;
+  return null;
+}
+
+// ── Team detail ─────────────────────────────────────────────
+//
+// Para conectar el API real:
+//   GET /teams/:id → TeamDetail
+//   GET /tournaments/:id/teams → TeamSnippet[]
+
+export interface TeamPlayer {
+  id: string;
+  userId?: string;
+  name: string;
+  shortName: string;
+  jerseyNumber?: number;
+  position?: string;
+}
+
+export interface TeamMatchItem {
+  matchId: string;
+  homeTeam: TeamSnippet;
+  awayTeam: TeamSnippet;
+  homeScore: number;
+  awayScore: number;
+  status: MatchStatus;
+  clock?: string;
+  period?: string;
+  venue?: string;
+  scheduledAt?: string;
+  tournamentName: string;
+  tournamentSlug: string;
+  roundLabel?: string;
+}
+
+export interface TeamStandingSummary {
+  position: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
+}
+
+export interface TeamDetail {
+  id: string;
+  name: string;
+  shortName: string;
+  logoUrl?: string;
+  tournamentId: string;
+  tournamentName: string;
+  tournamentSlug: string;
+  sport: Sport;
+  brandColor?: string;
+  standing?: TeamStandingSummary;
+  squad: TeamPlayer[];
+  recentMatches: TeamMatchItem[];
+}
+
+/** Unique teams from standings, else from match home/away. */
+export function getTeamsForTournament(tournament: TournamentDetail): TeamSnippet[] {
+  if (tournament.standings?.length) {
+    return tournament.standings.map(row => row.team);
+  }
+  const byId = new Map<string, TeamSnippet>();
+  for (const m of tournament.matches) {
+    byId.set(m.homeTeam.id, m.homeTeam);
+    byId.set(m.awayTeam.id, m.awayTeam);
+  }
+  return [...byId.values()];
+}
+
+function buildSquadForTeam(teamId: string, tournament: TournamentDetail): TeamPlayer[] {
+  const players = new Map<string, TeamPlayer>();
+
+  for (const tab of tournament.playerStats ?? []) {
+    for (const row of tab.rows) {
+      if (row.team.id !== teamId) continue;
+      const key = row.userId ?? row.playerName;
+      if (players.has(key)) continue;
+      players.set(key, {
+        id: key,
+        userId: row.userId,
+        name: row.playerName,
+        shortName: row.playerShortName,
+      });
+    }
+  }
+
+  // Enrich with enrollment jersey/position when the player profile is known
+  if (MOCK_USER_PLAYER.enrollments.some(e => e.teamId === teamId)) {
+    for (const e of MOCK_USER_PLAYER.enrollments) {
+      if (e.teamId !== teamId || !e.isActive) continue;
+      const existing = players.get(MOCK_USER_PLAYER.id) ?? players.get(MOCK_USER_PLAYER.name);
+      if (existing) {
+        existing.userId = MOCK_USER_PLAYER.id;
+        existing.jerseyNumber = e.jerseyNumber;
+        existing.position = e.position;
+      } else {
+        players.set(MOCK_USER_PLAYER.id, {
+          id: MOCK_USER_PLAYER.id,
+          userId: MOCK_USER_PLAYER.id,
+          name: MOCK_USER_PLAYER.name,
+          shortName: MOCK_USER_PLAYER.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+          jerseyNumber: e.jerseyNumber,
+          position: e.position,
+        });
+      }
+    }
+  }
+
+  // Placeholder squad when no playerStats (non-BetPlay tournaments)
+  if (players.size === 0) {
+    const team =
+      tournament.standings?.find(r => r.team.id === teamId)?.team ??
+      tournament.matches.flatMap(m => [m.homeTeam, m.awayTeam]).find(t => t.id === teamId);
+    if (team) {
+      for (let i = 1; i <= 5; i++) {
+        players.set(`${teamId}-p${i}`, {
+          id: `${teamId}-p${i}`,
+          name: `Jugador ${i}`,
+          shortName: `J${i}`,
+          jerseyNumber: i * 2 + 1,
+          position: i === 1 ? 'Portero' : i <= 3 ? 'Defensa' : 'Mediocampista',
+        });
+      }
+    }
+  }
+
+  return [...players.values()].sort((a, b) => (a.jerseyNumber ?? 99) - (b.jerseyNumber ?? 99));
+}
+
+function buildRecentMatchesForTeam(teamId: string, tournament: TournamentDetail): TeamMatchItem[] {
+  const items: TeamMatchItem[] = [];
+  const groups = tournament.groups ?? [{ label: 'Partidos', matches: tournament.matches }];
+
+  for (const group of groups) {
+    for (const m of group.matches) {
+      if (m.homeTeam.id !== teamId && m.awayTeam.id !== teamId) continue;
+      items.push({
+        matchId: m.id,
+        homeTeam: m.homeTeam,
+        awayTeam: m.awayTeam,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        status: m.status,
+        clock: m.clock,
+        period: m.period,
+        venue: m.venue,
+        scheduledAt: m.scheduledAt,
+        tournamentName: tournament.name,
+        tournamentSlug: tournament.slug,
+        roundLabel: group.label,
+      });
+    }
+  }
+
+  // Also include matches from the flat list not already in groups
+  for (const m of tournament.matches) {
+    if (m.homeTeam.id !== teamId && m.awayTeam.id !== teamId) continue;
+    if (items.some(i => i.matchId === m.id)) continue;
+    items.push({
+      matchId: m.id,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      status: m.status,
+      clock: m.clock,
+      period: m.period,
+      venue: m.venue,
+      scheduledAt: m.scheduledAt,
+      tournamentName: tournament.name,
+      tournamentSlug: tournament.slug,
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Resolves a team page payload from mock tournament data.
+ * In production: GET /teams/:id
+ */
+export function getMockTeamById(id: string): TeamDetail | null {
+  const teamId = id.toLowerCase();
+
+  // Prefer detailed tournaments (BetPlay), then scan all tournaments
+  const candidates: TournamentDetail[] = [
+    MOCK_TOURNAMENT_BETPLAY,
+    ...MOCK_TOURNAMENTS
+      .filter(t => t.slug !== MOCK_TOURNAMENT_BETPLAY.slug)
+      .map(t => getMockTournamentBySlug(t.slug)!)
+      .filter(Boolean),
+  ];
+
+  for (const tournament of candidates) {
+    const team =
+      tournament.standings?.find(r => r.team.id === teamId)?.team ??
+      tournament.matches.flatMap(m => [m.homeTeam, m.awayTeam]).find(t => t.id === teamId);
+
+    if (!team) continue;
+
+    const standingRow = tournament.standings?.find(r => r.team.id === teamId);
+
+    return {
+      id: team.id,
+      name: team.name,
+      shortName: team.shortName,
+      logoUrl: team.logoUrl,
+      tournamentId: tournament.id,
+      tournamentName: tournament.name,
+      tournamentSlug: tournament.slug,
+      sport: tournament.sport,
+      brandColor: tournament.brandColor,
+      standing: standingRow
+        ? {
+            position: standingRow.position,
+            played: standingRow.played,
+            won: standingRow.won,
+            drawn: standingRow.drawn,
+            lost: standingRow.lost,
+            goalsFor: standingRow.goalsFor,
+            goalsAgainst: standingRow.goalsAgainst,
+            points: standingRow.points,
+          }
+        : undefined,
+      squad: buildSquadForTeam(teamId, tournament),
+      recentMatches: buildRecentMatchesForTeam(teamId, tournament),
+    };
+  }
+
   return null;
 }

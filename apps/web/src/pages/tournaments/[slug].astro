@@ -9,7 +9,9 @@
  *   TournamentHero    — header con nombre, deporte, estado
  *   [en vivo]         — live strip si hay partidos activos
  *   StandingsTable    — tabla de posiciones (si hay standings)
- *   MatchFixture      — fixture agrupado por fase
+ *   TeamsGrid         — grid de equipos → /teams/[id]
+ *   MatchFixture      — Todos contra todos + Playoffs (bracket) si policies.playoffs
+ *   PlayerStatsTable  — goleadores / stats
  *
  * Para conectar el API real, reemplaza getMockTournamentBySlug por:
  *   import { getTournament } from '../../lib/api';
@@ -21,7 +23,8 @@ import StandingsTable from '../../components/tournament/StandingsTable.astro';
 import MatchFixture from '../../components/tournament/MatchFixture.astro';
 import LiveStrip from '../../components/match/LiveStrip.astro';
 import PlayerStatsTable from '../../components/tournament/PlayerStatsTable.astro';
-import { getMockTournamentBySlug } from '../../data/mock';
+import TeamsGrid from '../../components/tournament/TeamsGrid.astro';
+import { getMockTournamentBySlug, getTeamsForTournament } from '../../data/mock';
 
 const { slug } = Astro.params;
 
@@ -32,7 +35,21 @@ const liveNow = tournament.matches
   .filter(m => m.status === 'LIVE')
   .map(m => ({ ...m, _tournament: tournament.name, _sport: tournament.sport })) as any[];
 
-const hasTabs = !!(tournament.standings || tournament.groups?.length || tournament.playerStats?.length);
+const teams = getTeamsForTournament(tournament);
+
+const showPlayoffs =
+  tournament.policies?.playoffs === true &&
+  (tournament.playoffGroups?.length ?? 0) > 0;
+
+const hasFixture =
+  (tournament.groups?.length ?? 0) > 0 || showPlayoffs;
+
+const hasTabs = !!(
+  tournament.standings ||
+  teams.length ||
+  hasFixture ||
+  tournament.playerStats?.length
+);
 ---
 
 <Base
@@ -58,11 +75,14 @@ const hasTabs = !!(tournament.standings || tournament.groups?.length || tourname
           {tournament.standings && (
             <a href="#tabla" class="t-tab">Tabla</a>
           )}
+          {teams.length > 0 && (
+            <a href="#equipos" class="t-tab">Equipos</a>
+          )}
+          {hasFixture && (
+            <a href="#fixture" class="t-tab">Fixture</a>
+          )}
           {tournament.playerStats?.length && (
             <a href="#estadisticas" class="t-tab">Estadísticas</a>
-          )}
-          {tournament.groups && (
-            <a href="#fixture" class="t-tab">Fixture</a>
           )}
         </nav>
       )}
@@ -86,6 +106,29 @@ const hasTabs = !!(tournament.standings || tournament.groups?.length || tourname
         </section>
       )}
 
+      <!-- Teams -->
+      {teams.length > 0 && (
+        <section id="equipos" class="t-section" aria-label="Equipos del torneo">
+          <TeamsGrid
+            teams={teams}
+            standings={tournament.standings}
+            brandColor={tournament.brandColor}
+          />
+        </section>
+      )}
+
+      <!-- Fixture: Todos contra todos | Playoffs (bracket) -->
+      {hasFixture && (
+        <section id="fixture" class="t-section" aria-label="Fixture del torneo">
+          <MatchFixture
+            groups={tournament.groups}
+            playoffGroups={tournament.playoffGroups}
+            showPlayoffs={showPlayoffs}
+            brandColor={tournament.brandColor}
+          />
+        </section>
+      )}
+
       <!-- Player stats (goleadores, valla, etc.) -->
       {tournament.playerStats?.length && (
         <section id="estadisticas" class="t-section" aria-label="Estadísticas de jugadores">
@@ -93,13 +136,6 @@ const hasTabs = !!(tournament.standings || tournament.groups?.length || tourname
             stats={tournament.playerStats}
             brandColor={tournament.brandColor}
           />
-        </section>
-      )}
-
-      <!-- Fixture -->
-      {tournament.groups && tournament.groups.length > 0 && (
-        <section id="fixture" class="t-section" aria-label="Fixture del torneo">
-          <MatchFixture groups={tournament.groups} />
         </section>
       )}
 

@@ -1,48 +1,160 @@
 ---
 /**
- * MatchFixture.astro — fixture de partidos agrupados por fase.
- *
- * Cada grupo tiene un label ("Jornada 18", "Semifinales", etc.)
- * y muestra sus partidos en un scroll horizontal de MatchCards,
- * consistente con el patrón del index.
+ * MatchFixture.astro — sección Fixture con modos internos:
+ *   - Todos contra todos → jornadas + filas verticales
+ *   - Playoffs → esquema gráfico (solo si policies.playoffs)
  */
-import MatchCard from '../match/MatchCard.astro';
+import FixtureMatchRow from './FixtureMatchRow.astro';
+import PlayoffBracket from './PlayoffBracket.astro';
 import type { MatchGroup } from '../../data/mock';
 
 interface Props {
-  groups: MatchGroup[];
+  groups?: MatchGroup[];
+  playoffGroups?: MatchGroup[];
+  showPlayoffs?: boolean;
+  brandColor?: string;
 }
 
-const { groups } = Astro.props;
+const {
+  groups = [],
+  playoffGroups = [],
+  showPlayoffs = false,
+  brandColor,
+} = Astro.props;
+
+const hasRegular = groups.length > 0;
+const hasPlayoffs = showPlayoffs && playoffGroups.length > 0;
+const showModeTabs = hasRegular && hasPlayoffs;
+
+// Default mode: playoffs-only → playoffs; else regular (unless playoffs has LIVE)
+const playoffHasLive = playoffGroups.some(g => g.matches.some(m => m.status === 'LIVE'));
+const defaultMode: 'regular' | 'playoffs' =
+  !hasRegular && hasPlayoffs ? 'playoffs' :
+  hasPlayoffs && playoffHasLive && !groups.some(g => g.matches.some(m => m.status === 'LIVE'))
+    ? 'playoffs'
+    : hasRegular ? 'regular' : 'playoffs';
+
+const defaultRoundIndex = (() => {
+  const liveIdx = groups.findIndex(g => g.matches.some(m => m.status === 'LIVE'));
+  return liveIdx >= 0 ? liveIdx : 0;
+})();
 ---
 
-<div class="fixture">
-  <h2 class="fixture__title">Fixture</h2>
+<div class="fixture" id="matchFixture">
+  <div class="fixture__header">
+    <h2 class="fixture__title">Fixture</h2>
 
-  {groups.map(group => (
-    <div class="fixture__group">
-      <!-- Group label -->
-      <div class="fixture__group-header">
-        <span class="fixture__group-label">{group.label}</span>
-        <div class="fixture__group-line" aria-hidden="true"></div>
+    {showModeTabs && (
+      <div class="fixture__modes" role="tablist" aria-label="Tipo de fixture">
+        <button
+          type="button"
+          class:list={['fixture__mode', defaultMode === 'regular' && 'fixture__mode--active']}
+          role="tab"
+          aria-selected={defaultMode === 'regular' ? 'true' : 'false'}
+          aria-controls="fixture-mode-regular"
+          data-fixture-mode="regular"
+        >
+          Todos contra todos
+        </button>
+        <button
+          type="button"
+          class:list={['fixture__mode', defaultMode === 'playoffs' && 'fixture__mode--active']}
+          role="tab"
+          aria-selected={defaultMode === 'playoffs' ? 'true' : 'false'}
+          aria-controls="fixture-mode-playoffs"
+          data-fixture-mode="playoffs"
+        >
+          Playoffs
+        </button>
       </div>
+    )}
 
-      <!-- Match cards strip — same pattern as index -->
-      <div class="fixture__strip" role="list" aria-label={group.label}>
-        {group.matches.map(match => (
-          <div role="listitem">
-            <MatchCard match={match} />
+    {!showModeTabs && hasPlayoffs && !hasRegular && (
+      <span class="fixture__mode-badge">Playoffs</span>
+    )}
+  </div>
+
+  <!-- Regular season -->
+  {hasRegular && (
+    <div
+      class:list={['fixture__mode-panel', defaultMode === 'regular' && 'fixture__mode-panel--active']}
+      id="fixture-mode-regular"
+      role="tabpanel"
+      hidden={defaultMode !== 'regular'}
+    >
+      {groups.length > 1 && (
+        <div class="fixture__tabs" role="tablist" aria-label="Jornadas">
+          {groups.map((group, i) => {
+            const hasLive = group.matches.some(m => m.status === 'LIVE');
+            return (
+              <button
+                class:list={[
+                  'fixture__tab',
+                  i === defaultRoundIndex && 'fixture__tab--active',
+                  hasLive && 'fixture__tab--live',
+                ]}
+                type="button"
+                role="tab"
+                aria-selected={i === defaultRoundIndex ? 'true' : 'false'}
+                data-fixture-tab={i}
+              >
+                {hasLive && <span class="fixture__tab-dot" aria-hidden="true" />}
+                {group.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {groups.map((group, i) => (
+        <div
+          class:list={['fixture__panel', i === defaultRoundIndex && 'fixture__panel--active']}
+          data-fixture-panel={i}
+          hidden={i !== defaultRoundIndex}
+        >
+          {groups.length === 1 && (
+            <div class="fixture__group-header">
+              <span class="fixture__group-label">{group.label}</span>
+              <div class="fixture__group-line" aria-hidden="true"></div>
+            </div>
+          )}
+          <div class="fixture__list" role="list" aria-label={group.label}>
+            {group.matches.map(match => (
+              <div role="listitem">
+                <FixtureMatchRow match={match} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
-  ))}
+  )}
+
+  <!-- Playoffs bracket -->
+  {hasPlayoffs && (
+    <div
+      class:list={['fixture__mode-panel', defaultMode === 'playoffs' && 'fixture__mode-panel--active']}
+      id="fixture-mode-playoffs"
+      role="tabpanel"
+      hidden={defaultMode !== 'playoffs'}
+    >
+      <PlayoffBracket rounds={playoffGroups} brandColor={brandColor} />
+    </div>
+  )}
 </div>
 
 <style>
 .fixture {
   padding: 0 24px;
   margin-bottom: 40px;
+}
+.fixture__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 .fixture__title {
   font-family: var(--font-display);
@@ -51,13 +163,109 @@ const { groups } = Astro.props;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-primary);
-  margin-bottom: 20px;
+  margin: 0;
 }
 
-/* Group */
-.fixture__group {
-  margin-bottom: 28px;
+/* Mode switch: Todos contra todos | Playoffs */
+.fixture__modes {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
+.fixture__mode {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+.fixture__mode:hover { color: var(--text-primary); }
+.fixture__mode--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.fixture__mode-badge {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 4px 10px;
+  border: 1px solid rgba(0,229,255,0.3);
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+}
+
+.fixture__mode-panel { display: none; }
+.fixture__mode-panel--active { display: block; }
+
+/* Round tabs (jornadas) */
+.fixture__tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.fixture__tabs::-webkit-scrollbar { display: none; }
+
+.fixture__tab {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+.fixture__tab:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.fixture__tab--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.fixture__tab--live.fixture__tab--active {
+  color: var(--live);
+  background: var(--live-dim);
+  border-color: rgba(255, 59, 59, 0.35);
+}
+.fixture__tab-dot {
+  width: 5px; height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+}
+
+.fixture__panel { display: none; }
+.fixture__panel--active { display: block; }
+
 .fixture__group-header {
   display: flex;
   align-items: center;
@@ -79,23 +287,53 @@ const { groups } = Astro.props;
   background: var(--border);
 }
 
-/* Strip — same as TournamentRow */
-.fixture__strip {
+.fixture__list {
   display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  margin: 0 -24px;
-  padding-left: 24px;
-  padding-right: 24px;
-  -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
-  mask-image: linear-gradient(to right, black 88%, transparent 100%);
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-.fixture__strip::-webkit-scrollbar { height: 2px; }
-.fixture__strip::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>
+
+<script>
+  (function () {
+    const root = document.getElementById('matchFixture');
+    if (!root) return;
+
+    // Mode tabs: regular ↔ playoffs
+    const modeBtns = root.querySelectorAll('[data-fixture-mode]');
+    modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.getAttribute('data-fixture-mode');
+        modeBtns.forEach(b => {
+          const active = b.getAttribute('data-fixture-mode') === mode;
+          b.classList.toggle('fixture__mode--active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        root.querySelectorAll('.fixture__mode-panel').forEach(panel => {
+          const active = panel.id === 'fixture-mode-' + mode;
+          panel.classList.toggle('fixture__mode-panel--active', active);
+          panel.hidden = !active;
+        });
+      });
+    });
+
+    // Round tabs inside regular mode
+    const roundTabs = root.querySelectorAll('[data-fixture-tab]');
+    const roundPanels = root.querySelectorAll('[data-fixture-panel]');
+    roundTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const idx = tab.getAttribute('data-fixture-tab');
+        roundTabs.forEach(t => {
+          const active = t.getAttribute('data-fixture-tab') === idx;
+          t.classList.toggle('fixture__tab--active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        roundPanels.forEach(panel => {
+          const active = panel.getAttribute('data-fixture-panel') === idx;
+          panel.classList.toggle('fixture__panel--active', active);
+          panel.hidden = !active;
+        });
+      });
+    });
+  })();
+</script>

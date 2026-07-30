@@ -1,0 +1,277 @@
+---
+/**
+ * PlayoffBracket.astro — esquema gráfico tipo llave (bracket map).
+ *
+ * Cada MatchGroup es una ronda de izquierda a derecha
+ * (Semifinales → Final). Las cajas linkean a /matches/[id].
+ */
+import type { MatchGroup, MatchSnippet } from '../../data/mock';
+
+interface Props {
+  rounds: MatchGroup[];
+  brandColor?: string;
+}
+
+const { rounds, brandColor } = Astro.props;
+const accent = brandColor ?? 'var(--accent)';
+
+function scoreLabel(m: MatchSnippet): string {
+  if (m.status === 'SCHEDULED') return 'vs';
+  return `${m.homeScore} — ${m.awayScore}`;
+}
+
+function statusClass(status: MatchSnippet['status']): string {
+  return `pb-match--${status.toLowerCase()}`;
+}
+---
+
+<div class="pb" aria-label="Esquema de playoffs">
+  <div class="pb__scroll">
+    <div class="pb__map" style={`--pb-accent: ${accent}`}>
+      {rounds.map((round, ri) => (
+        <div class="pb__round" data-round={ri}>
+          <div class="pb__round-label">{round.label}</div>
+          <div class="pb__slots">
+            {round.matches.map(m => {
+              const homeWins = m.status !== 'SCHEDULED' && m.homeScore > m.awayScore;
+              const awayWins = m.status !== 'SCHEDULED' && m.awayScore > m.homeScore;
+              return (
+                <a
+                  href={`/matches/${m.id}`}
+                  class:list={['pb-match', statusClass(m.status)]}
+                  aria-label={`${m.homeTeam.name} vs ${m.awayTeam.name}`}
+                >
+                  <div class="pb-match__rail" aria-hidden="true"></div>
+                  <div class:list={['pb-match__row', homeWins && 'pb-match__row--win']}>
+                    <span class="pb-match__logo" aria-hidden="true">{m.homeTeam.shortName}</span>
+                    <span class="pb-match__name">{m.homeTeam.shortName}</span>
+                    <span class="pb-match__pts">
+                      {m.status === 'SCHEDULED' ? '−' : m.homeScore}
+                    </span>
+                  </div>
+                  <div class:list={['pb-match__row', awayWins && 'pb-match__row--win']}>
+                    <span class="pb-match__logo" aria-hidden="true">{m.awayTeam.shortName}</span>
+                    <span class="pb-match__name">{m.awayTeam.shortName}</span>
+                    <span class="pb-match__pts">
+                      {m.status === 'SCHEDULED' ? '−' : m.awayScore}
+                    </span>
+                  </div>
+                  <div class="pb-match__meta">
+                    {m.status === 'LIVE' && (
+                      <span class="pb-match__live">
+                        <span class="pb-match__dot" aria-hidden="true" />
+                        En vivo {m.clock ?? ''}
+                      </span>
+                    )}
+                    {m.status === 'SCHEDULED' && (
+                      <span>{m.period ?? scoreLabel(m)}</span>
+                    )}
+                    {m.status === 'FINISHED' && <span>Final</span>}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+.pb {
+  margin-top: 4px;
+}
+.pb__scroll {
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.pb__map {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: min-content;
+  padding: 8px 4px 16px;
+}
+
+.pb__round {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  position: relative;
+}
+.pb__round + .pb__round {
+  padding-left: 40px;
+}
+/* Connector spine between rounds */
+.pb__round + .pb__round::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--border), var(--pb-accent, var(--accent)));
+  opacity: 0.55;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.pb__round-label {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pb__slots {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 16px;
+  min-height: 160px;
+}
+
+.pb-match {
+  display: block;
+  position: relative;
+  width: 180px;
+  margin: 0 auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  overflow: hidden;
+  transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+.pb-match:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+.pb-match--live {
+  border-color: rgba(255,59,59,0.4);
+}
+.pb-match--live .pb-match__rail {
+  background: var(--live);
+}
+.pb-match--scheduled .pb-match__rail {
+  background: var(--pb-accent, var(--accent));
+}
+.pb-match--finished .pb-match__rail {
+  background: var(--border-hover);
+}
+
+.pb-match__rail {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+}
+
+.pb-match__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.pb-match__row:last-of-type {
+  border-bottom: none;
+}
+.pb-match__row--win .pb-match__name,
+.pb-match__row--win .pb-match__pts {
+  color: var(--pb-accent, var(--accent));
+}
+
+.pb-match__logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.48rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.pb-match__name {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.pb-match__pts {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  min-width: 14px;
+  text-align: right;
+}
+
+.pb-match__meta {
+  padding: 5px 10px 7px;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.pb-match__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--live);
+}
+.pb-match__dot {
+  width: 5px; height: 5px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+}
+
+/* Final round: slightly larger / centered emphasis */
+.pb__round:last-child .pb-match {
+  border-color: color-mix(in srgb, var(--pb-accent, #00e5ff) 35%, var(--border));
+}
+.pb__round:last-child .pb__round-label {
+  color: var(--pb-accent, var(--accent));
+}
+
+@media (max-width: 640px) {
+  .pb__round {
+    min-width: 170px;
+  }
+  .pb-match {
+    width: 160px;
+  }
+  .pb__round + .pb__round {
+    padding-left: 28px;
+  }
+  .pb__round + .pb__round::before {
+    width: 28px;
+  }
+}
+</style>

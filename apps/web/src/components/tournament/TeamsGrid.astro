@@ -1,0 +1,141 @@
+---
+/**
+ * TeamsGrid.astro — grid de equipos del torneo.
+ *
+ * Cada card linkea a /teams/[id]. Si hay standings, muestra posición y PTS.
+ */
+import type { StandingsRow, TeamSnippet } from '../../data/mock';
+
+interface Props {
+  teams: TeamSnippet[];
+  standings?: StandingsRow[];
+  brandColor?: string;
+}
+
+const { teams, standings, brandColor } = Astro.props;
+
+const standingById = new Map(
+  (standings ?? []).map(row => [row.team.id, row])
+);
+
+const accent = brandColor ?? 'var(--accent)';
+---
+
+<div class="teams-grid-wrap">
+  <h2 class="teams-grid__title">Equipos</h2>
+
+  <div class="teams-grid" role="list" aria-label="Equipos del torneo">
+    {teams.map(team => {
+      const row = standingById.get(team.id);
+      return (
+        <a
+          href={`/teams/${team.id}`}
+          class="team-card"
+          role="listitem"
+          aria-label={`Ver equipo ${team.name}`}
+        >
+          <div class="team-card__logo" aria-hidden="true">{team.shortName}</div>
+          <div class="team-card__info">
+            <span class="team-card__name">{team.name}</span>
+            {row ? (
+              <span class="team-card__meta" style={`color: ${accent}`}>
+                #{row.position} · {row.points} PTS
+              </span>
+            ) : (
+              <span class="team-card__meta">Ver plantilla</span>
+            )}
+          </div>
+          <span class="team-card__arrow" aria-hidden="true">→</span>
+        </a>
+      );
+    })}
+  </div>
+</div>
+
+<style>
+.teams-grid-wrap {
+  padding: 0 24px;
+  margin-bottom: 40px;
+}
+.teams-grid__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.team-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.team-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+.team-card__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.team-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.team-card__name {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-card__meta {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.team-card__arrow {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color var(--transition), transform var(--transition);
+}
+.team-card:hover .team-card__arrow {
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+</style>

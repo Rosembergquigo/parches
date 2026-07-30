@@ -4,6 +4,8 @@ Plataforma de marketplace de torneos deportivos con streaming en vivo.
 
 ## Apps
 
+See [`apps/README.md`](apps/README.md) for a full evaluation of each app, architecture, and maturity gaps.
+
 | App | Descripción | Puerto |
 |-----|-------------|--------|
 | `web` | Marketplace de torneos (Astro SSR) | 4321 |
@@ -139,9 +141,5 @@ model Post {
 
 ### Página del equipo `/teams/[id]`
 
-Actualmente `/teams/[id]` redirige al torneo correspondiente (302).
-Página real pendiente de implementar con:
-- Plantilla del equipo (formación, jugadores con posición y dorsal)
-- Historial de partidos del equipo en todos los torneos
-- Estadísticas del equipo (goles a favor/en contra, posesión promedio)
-- Lista de jugadores con link a `/users/[id]`
+Implementada en `apps/web` con mock data: plantilla, partidos y estadísticas.
+Pendiente: conectar a `GET /teams/:id` del API y enriquecer plantilla/formación.

@@ -1,0 +1,90 @@
+---
+/**
+ * TeamStatsBar.astro — chips de estadísticas del equipo en el torneo.
+ */
+import type { Sport, TeamStandingSummary } from '../../data/mock';
+
+interface Props {
+  standing: TeamStandingSummary;
+  sport: Sport;
+}
+
+const { standing, sport } = Astro.props;
+const isBasket = sport === 'basketball';
+const goalDiff = standing.goalsFor - standing.goalsAgainst;
+const diffStr = goalDiff > 0 ? `+${goalDiff}` : String(goalDiff);
+
+const chips = [
+  { label: 'PJ', value: String(standing.played) },
+  { label: 'G', value: String(standing.won) },
+  ...(!isBasket ? [{ label: 'E', value: String(standing.drawn) }] : []),
+  { label: 'P', value: String(standing.lost) },
+  ...(!isBasket
+    ? [
+        { label: 'GF', value: String(standing.goalsFor) },
+        { label: 'GC', value: String(standing.goalsAgainst) },
+        { label: 'DG', value: diffStr },
+      ]
+    : []),
+  { label: 'PTS', value: String(standing.points) },
+];
+---
+
+<div class="tsb">
+  <h2 class="tsb__title">Estadísticas</h2>
+  <div class="tsb__chips" role="list" aria-label="Resumen estadístico">
+    {chips.map(chip => (
+      <div class="tsb__chip" role="listitem">
+        <span class="tsb__value">{chip.value}</span>
+        <span class="tsb__label">{chip.label}</span>
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+.tsb {
+  padding: 0 24px;
+  margin-bottom: 32px;
+}
+.tsb__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.tsb__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tsb__chip {
+  min-width: 64px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.tsb__value {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.tsb__label {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+</style>

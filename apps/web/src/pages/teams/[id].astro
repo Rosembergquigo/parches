@@ -1,49 +1,129 @@
 ---
 /**
- * pages/teams/[id].astro — placeholder de página de equipo.
+ * pages/teams/[id].astro — página de equipo.
  *
- * Por ahora redirige al torneo correspondiente.
- * Cuando se implemente la página real del equipo, se reemplaza
- * este archivo con el contenido completo.
- *
- * El mock mapea teamId → { tournamentSlug } para construir
- * la URL de destino. En producción vendría del API:
- *   GET /teams/:id → { tournamentSlug, ... }
- *
- * Documentado en backlog: página de equipo completa con
- * plantilla, jugadores, historial de partidos.
+ * SSR. 404 si el id no existe en mock.
+ * Para API real: import { getTeam } from '../../lib/api';
+ *   const team = await getTeam(id!, Astro.request);
  */
-
-// Mock: mapa de equipos conocidos → torneo
-const TEAM_TOURNAMENT_MAP: Record<string, string> = {
-  med:  'liga-betplay-2025',
-  mil:  'liga-betplay-2025',
-  ame:  'liga-betplay-2025',
-  jun:  'liga-betplay-2025',
-  nal:  'liga-betplay-2025',
-  cal:  'liga-betplay-2025',
-  san:  'liga-betplay-2025',
-  pas:  'liga-betplay-2025',
-  buc:  'lnb-2025',
-  pir:  'lnb-2025',
-  coc:  'lnb-2025',
-  vaq:  'lnb-2025',
-  cab:  'copa-davis-col-2025',
-  gar:  'copa-davis-col-2025',
-  col:  'sudamericano-voleibol-2025',
-  bra:  'sudamericano-voleibol-2025',
-  cai:  'lpb-playoffs-2025',
-  tor:  'lpb-playoffs-2025',
-};
+import Base from '../../layouts/Base.astro';
+import TeamHero from '../../components/team/TeamHero.astro';
+import TeamSquad from '../../components/team/TeamSquad.astro';
+import TeamMatchHistory from '../../components/team/TeamMatchHistory.astro';
+import TeamStatsBar from '../../components/team/TeamStatsBar.astro';
+import { getMockTeamById } from '../../data/mock';
 
 const { id } = Astro.params;
-const tournamentSlug = TEAM_TOURNAMENT_MAP[id!.toLowerCase()];
+const team = getMockTeamById(id!);
 
-// Si conocemos el equipo → redirigir al torneo
-if (tournamentSlug) {
-  return Astro.redirect(`/tournaments/${tournamentSlug}`, 302);
-}
+if (!team) return Astro.redirect('/404');
 
-// Si no lo conocemos → redirigir al marketplace
-return Astro.redirect('/', 302);
+const hasStats = !!team.standing;
+const hasSquad = team.squad.length > 0;
+const hasMatches = team.recentMatches.length > 0;
 ---
+
+<Base
+  title={`${team.name} | ${team.tournamentName}`}
+  description={`Plantilla, partidos y estadísticas de ${team.name} en ${team.tournamentName}.`}
+>
+  <TeamHero team={team} />
+
+  <main class="t-page">
+    <div class="t-page__inner">
+      <nav class="t-tabs" id="tTabs" aria-label="Secciones del equipo">
+        {hasSquad && <a href="#plantilla" class="t-tab">Plantilla</a>}
+        {hasMatches && <a href="#partidos" class="t-tab">Partidos</a>}
+        {hasStats && <a href="#estadisticas" class="t-tab">Estadísticas</a>}
+      </nav>
+
+      {hasSquad && (
+        <section id="plantilla" class="t-section" aria-label="Plantilla">
+          <TeamSquad players={team.squad} />
+        </section>
+      )}
+
+      {hasMatches && (
+        <section id="partidos" class="t-section" aria-label="Partidos">
+          <TeamMatchHistory matches={team.recentMatches} teamId={team.id} />
+        </section>
+      )}
+
+      {hasStats && team.standing && (
+        <section id="estadisticas" class="t-section" aria-label="Estadísticas">
+          <TeamStatsBar standing={team.standing} sport={team.sport} />
+        </section>
+      )}
+    </div>
+  </main>
+</Base>
+
+<style>
+.t-page {
+  flex: 1;
+  padding-bottom: 60px;
+}
+.t-page__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.t-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 14px 24px;
+  position: sticky;
+  top: 50px;
+  z-index: 10;
+  background: rgba(10,12,15,0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.t-tab {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: color var(--transition), background var(--transition);
+}
+.t-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+.t-section {
+  padding-top: 28px;
+  scroll-margin-top: 100px;
+}
+</style>
+
+<script>
+  (function () {
+    const tabs = document.querySelectorAll<HTMLAnchorElement>('.t-tab');
+    const sections = document.querySelectorAll<HTMLElement>('.t-section');
+    if (!tabs.length || !sections.length) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            tabs.forEach(tab => {
+              const isActive = tab.getAttribute('href') === `#${id}`;
+              tab.style.color = isActive ? 'var(--accent)' : '';
+              tab.style.background = isActive ? 'var(--accent-dim)' : '';
+            });
+          }
+        });
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    );
+
+    sections.forEach(s => observer.observe(s));
+  })();
+</script>
