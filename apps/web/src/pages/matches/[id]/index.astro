@@ -12,22 +12,25 @@
  * WebSocket solo si status === 'LIVE'. Si está FINISHED muestran
  * datos históricos sin ninguna conexión persistente.
  *
- * Para conectar datos reales:
- *   import { getMatch } from '../../../lib/api';
- *   const match = await getMatch(id!, Astro.request);
+ * Datos reales desde @parches/api (GET /api/matches/:id). `viewerCount`
+ * (streaming-data/Redis) todavía no existe en la API real. `stats`
+ * (remates, posesión...) sí existe (Match.stats, columna Json opcional) —
+ * si el partido no tiene estadísticas cargadas, el panel de Estadísticas
+ * simplemente no se renderiza.
  */
 
 import Base from '../../../layouts/Base.astro';
 import LiveScoreboard  from '../../../components/match/LiveScoreboard';
 import VideoPlayer     from '../../../components/match/VideoPlayer';
+import EventTimeline   from '../../../components/match/EventTimeline';
 import EventFeed       from '../../../components/match/EventFeed';
 import MatchStatsPanel from '../../../components/match/MatchStatsPanel';
 import SportIcon       from '../../../components/ui/SportIcon.astro';
-import { getMockMatchById } from '../../../data/mock';
+import { getMatchDetail } from '../../../lib/api';
 import { ENDPOINTS } from '@parches/config';
 
 const { id } = Astro.params;
-const match = getMockMatchById(id!);
+const match = await getMatchDetail(id!, Astro.request);
 
 if (!match) return Astro.redirect('/404');
 
@@ -48,7 +51,7 @@ const sportLabel: Record<string, string> = {
 
 const wsUrl = ENDPOINTS.STREAMING_DATA_WS;
 
-const pageTitle = `${homeTeam.shortName} vs ${awayTeam.shortName} | Parches`;
+const pageTitle = `${homeTeam.shortName} vs ${awayTeam.shortName} | Chapi`;
 const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} · ${tournamentName}`;
 ---
 
@@ -95,11 +98,11 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
     </div>
   </div>
 
-  <!-- Main content: video + events -->
+  <!-- Main content: video (full width) + timeline + tabs -->
   <main class="match-main">
-    <div class="match-layout">
+    <div class="match-stack">
 
-      <!-- Left: Video player -->
+      <!-- Video player (full width for a bigger streaming screen) -->
       <div class="match-video">
         <VideoPlayer
           client:load
@@ -109,42 +112,53 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
           awayTeam={awayTeam.name}
           streamKey={streamKey}
         />
+      </div>
 
-        <!-- Match info card (below video) -->
-        <div class="match-info-card">
+      <!-- Match info strip (below video) -->
+      <div class="match-info-card">
+        <div class="match-info-card__row">
+          <span class="match-info-card__label">Torneo</span>
+          <a href={`/tournaments/${tournamentSlug}`} class="match-info-card__value match-info-card__link">
+            {tournamentName}
+          </a>
+        </div>
+        {period && (
           <div class="match-info-card__row">
-            <span class="match-info-card__label">Torneo</span>
-            <a href={`/tournaments/${tournamentSlug}`} class="match-info-card__value match-info-card__link">
-              {tournamentName}
-            </a>
+            <span class="match-info-card__label">Tiempo</span>
+            <span class="match-info-card__value">{period}</span>
           </div>
-          {period && (
-            <div class="match-info-card__row">
-              <span class="match-info-card__label">Tiempo</span>
-              <span class="match-info-card__value">{period}</span>
-            </div>
-          )}
-          {venue && (
-            <div class="match-info-card__row">
-              <span class="match-info-card__label">Estadio</span>
-              <span class="match-info-card__value">{venue}</span>
-            </div>
-          )}
+        )}
+        {venue && (
           <div class="match-info-card__row">
-            <span class="match-info-card__label">Estado</span>
-            <span class:list={[
-              'match-info-card__value',
-              isLive     && 'match-info-card__value--live',
-              isFinished && 'match-info-card__value--fin',
-            ]}>
-              {isLive ? '● En vivo' : isFinished ? 'Finalizado' : 'Programado'}
-            </span>
+            <span class="match-info-card__label">Estadio</span>
+            <span class="match-info-card__value">{venue}</span>
           </div>
+        )}
+        <div class="match-info-card__row">
+          <span class="match-info-card__label">Estado</span>
+          <span class:list={[
+            'match-info-card__value',
+            isLive     && 'match-info-card__value--live',
+            isFinished && 'match-info-card__value--fin',
+          ]}>
+            {isLive ? '● En vivo' : isFinished ? 'Finalizado' : 'Programado'}
+          </span>
         </div>
       </div>
 
-      <!-- Right: Tabbed panel (Cronología | Estadísticas) -->
-      <aside class="match-panel" aria-label="Información del partido">
+      <!-- Horizontal event timeline — always visible, quick overview -->
+      <EventTimeline
+        client:load
+        matchId={id!}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        initialEvents={events}
+        status={status}
+        wsUrl={wsUrl}
+      />
+
+      <!-- Tabbed panel (Cronología detalle | Estadísticas) -->
+      <section class="match-panel" aria-label="Información del partido">
 
         <!-- Tab nav -->
         <div class="mp-tabs" role="tablist" aria-label="Secciones del partido">
@@ -172,7 +186,7 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
           )}
         </div>
 
-        <!-- Panel: Cronología -->
+        <!-- Panel: Cronología (detalle) -->
         <div
           class="mp-panel"
           id="panel-cronologia"
@@ -209,7 +223,7 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
           </div>
         )}
 
-      </aside>
+      </section>
 
     </div>
   </main>
@@ -302,35 +316,30 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
   flex: 1;
   padding-bottom: 60px;
 }
-.match-layout {
+.match-stack {
   max-width: 1280px;
   margin: 0 auto;
   padding: 24px 28px;
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  grid-template-rows: auto;
-  gap: 20px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* Video column */
+/* Video */
 .match-video {
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
-/* Event feed / stats panel */
+/* Cronología detalle / stats panel */
 .match-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  height: 560px;
+  max-height: 480px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: sticky;
-  top: 72px;
 }
 
 /* Tab nav */
@@ -372,24 +381,25 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
 }
 .mp-panel--hidden { display: none; }
 
-/* Match info card */
+/* Match info strip — horizontal row of pills below the video */
 .match-info-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 4px 16px;
   display: flex;
-  flex-direction: column;
-  gap: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
 }
 .match-info-card__row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  padding: 10px 16px;
+  border-right: 1px solid var(--border);
 }
-.match-info-card__row:last-child { border-bottom: none; }
+.match-info-card__row:last-child { border-right: none; }
 .match-info-card__label {
   font-family: var(--font-display);
   font-size: 0.65rem;
@@ -416,18 +426,12 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .match-layout {
-    grid-template-columns: 1fr;
-    padding: 16px;
-  }
-  .match-feed {
-    position: static;
-    height: 380px;
-  }
+  .match-stack { padding: 16px; }
 }
 @media (max-width: 600px) {
   .match-header__content { padding: 14px 16px 0; }
-  .match-layout { padding: 12px; gap: 12px; }
+  .match-stack { padding: 12px; gap: 12px; }
+  .match-info-card__row { padding: 8px 10px; }
 }
 </style>
 

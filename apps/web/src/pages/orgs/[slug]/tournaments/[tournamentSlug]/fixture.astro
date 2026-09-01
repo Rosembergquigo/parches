@@ -1,0 +1,212 @@
+---
+/**
+ * Cargar o regenerar el fixture de un torneo ya creado.
+ * Misma generación que el paso 4 del wizard (todos-contra-todos).
+ */
+import Base from '../../../../../layouts/Base.astro';
+import { requireAuth } from '../../../../../lib/auth';
+import { api, getOrganization, ApiError } from '../../../../../lib/api';
+import type { RawTournament } from '../../../../../lib/adapters';
+
+const user = await requireAuth(Astro);
+if (user instanceof Response) return user;
+
+const { slug, tournamentSlug } = Astro.params;
+const org = await getOrganization(slug!, Astro.request);
+if (!org) return Astro.redirect('/404');
+if (!org.myRole) return Astro.redirect(`/orgs/${org.slug}`);
+
+let tournament: RawTournament | null = null;
+try {
+  tournament = await api.get<RawTournament>(`/tournaments/${tournamentSlug}`, Astro.request);
+} catch (err) {
+  if (err instanceof ApiError && err.status === 404) return Astro.redirect('/404');
+  throw err;
+}
+if (!tournament || tournament.organizationId !== org.id) {
+  return Astro.redirect(`/orgs/${org.slug}`);
+}
+
+const existing = (tournament.matches ?? []).filter(m => m.stage !== 'Cruces');
+const played = existing.some(m => m.status === 'LIVE' || m.status === 'FINISHED' || m.status === 'HALFTIME');
+
+let error: string | null = null;
+let doubleRound = false;
+let venue = '';
+let kickoff = '15:00';
+let force = false;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const form = await Astro.request.formData();
+    doubleRound = form.get('doubleRound') === 'on';
+    venue = String(form.get('venue') ?? '').trim();
+    kickoff = String(form.get('kickoff') ?? '15:00').trim() || '15:00';
+    force = form.get('force') === 'on';
+
+    await api.post(
+      `/tournaments/${tournament.id}/fixture/generate`,
+      {
+        doubleRound,
+        venue: venue || undefined,
+        kickoff,
+        force: force || existing.length > 0,
+      },
+      Astro.request
+    );
+    return Astro.redirect(`/tournaments/${tournament.slug ?? tournament.id}`);
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo generar el fixture';
+  }
+}
+
+const teamCount = tournament.teams?.length ?? 0;
+---
+
+<Base
+  title={`Fixture · ${tournament.name} | Chapi`}
+  description={`Cargar el calendario de ${tournament.name}.`}
+  noIndex={true}
+>
+  <main class="wiz">
+    <div class="wiz__card">
+      <div class="wiz__header">
+        <span class="accent-line"></span>
+        <p class="wiz__kicker">
+          <a href={`/orgs/${org.slug}`}>{org.name}</a>
+          ·
+          <a href={`/tournaments/${tournament.slug ?? tournament.id}`}>{tournament.name}</a>
+        </p>
+        <h1 class="display-md" style="margin-top: 8px;">Cargar fixture</h1>
+        <p class="wiz__lead">
+          Todos-contra-todos{tournament.groups && tournament.groups.length > 0 ? ' dentro de cada grupo' : ''}.
+          {teamCount} equipo{teamCount === 1 ? '' : 's'}.
+        </p>
+      </div>
+
+      {played && (
+        <div class="auth-error" role="alert">
+          Ya hay partidos jugados o en vivo. No se puede regenerar el fixture.
+        </div>
+      )}
+
+      {error && (
+        <div class="auth-error" role="alert">{error}</div>
+      )}
+
+      {!played && (
+        <form method="POST" class="wiz__form">
+          {existing.length > 0 && (
+            <p class="wiz__hint">
+              Este torneo ya tiene {existing.length} partido{existing.length === 1 ? '' : 's'} programados.
+              Generar de nuevo los reemplaza (solo los que no se han jugado).
+            </p>
+          )}
+
+          <label class="wiz__check">
+            <input type="checkbox" name="doubleRound" checked={doubleRound} />
+            Ida y vuelta
+          </label>
+
+          <div class="wiz__row">
+            <div class="form-field">
+              <label class="label" for="kickoff">Hora</label>
+              <input type="time" id="kickoff" name="kickoff" value={kickoff} class="form-input" />
+            </div>
+            <div class="form-field">
+              <label class="label" for="venue">Sede (opcional)</label>
+              <input type="text" id="venue" name="venue" value={venue}
+                placeholder="Estadio, coliseo…" class="form-input" />
+            </div>
+          </div>
+
+          <input type="hidden" name="force" value={existing.length > 0 ? 'on' : ''} />
+
+          <div class="wiz__nav">
+            <a href={`/tournaments/${tournament.slug ?? tournament.id}`} class="btn-ghost">Cancelar</a>
+            <button type="submit" class="btn-accent">
+              {existing.length > 0 ? 'Regenerar fixture' : 'Generar fixture'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  </main>
+</Base>
+
+<style>
+.wiz {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 72px;
+}
+.wiz__card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+}
+.wiz__header { margin-bottom: 24px; }
+.wiz__kicker {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 10px 0 0;
+}
+.wiz__kicker a { color: var(--accent); }
+.wiz__lead {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-top: 6px;
+}
+.auth-error {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+.wiz__form { display: flex; flex-direction: column; gap: 20px; }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  outline: none;
+  width: 100%;
+}
+.form-input:focus { border-color: var(--accent); }
+.wiz__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.wiz__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.wiz__check input { accent-color: var(--accent); }
+.wiz__hint { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+.wiz__nav {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .wiz__row { grid-template-columns: 1fr; }
+}
+</style>

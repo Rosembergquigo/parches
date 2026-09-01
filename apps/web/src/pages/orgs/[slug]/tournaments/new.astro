@@ -1,0 +1,622 @@
+---
+/**
+ * pages/orgs/[slug]/tournaments/new.astro — wizard de torneo.
+ *
+ * Cuatro pasos (datos → formato → equipos → fixture).
+ * Al guardar, el torneo se ve en /tournaments/[slug] con calendario.
+ *
+ * Auth + membresía OWNER/ADMIN/EDITOR de esa empresa.
+ */
+import Base from '../../../../layouts/Base.astro';
+import { requireAuth } from '../../../../lib/auth';
+import { getOrganization } from '../../../../lib/api';
+import {
+  WIZARD_SPORTS,
+  defaultWizard,
+  readWizardForm,
+  validateWizard,
+  publishWizard,
+  groupLabel,
+  type WizardInput,
+} from '../../../../lib/tournamentWizard';
+
+const user = await requireAuth(Astro);
+if (user instanceof Response) return user;
+
+const { slug } = Astro.params;
+const org = await getOrganization(slug!, Astro.request);
+if (!org) return Astro.redirect('/404');
+if (!org.myRole) return Astro.redirect(`/orgs/${org.slug}`);
+
+let error: string | null = null;
+let draft: WizardInput = defaultWizard(org.brandColor);
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  draft = readWizardForm(form);
+  const invalid = validateWizard(draft);
+  if (invalid) {
+    error = invalid;
+  } else {
+    try {
+      const created = await publishWizard(org.id, draft, Astro.request);
+      return Astro.redirect(`/tournaments/${created.slug}`);
+    } catch (err: unknown) {
+      error = err instanceof Error ? err.message : 'No se pudo crear el torneo';
+    }
+  }
+}
+
+const groupOptions = Array.from({ length: draft.groupCount }, (_, i) => ({
+  value: i,
+  label: groupLabel(i),
+}));
+
+const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
+  ? 4
+  : error && /equipo|Grupo|abreviación/i.test(error)
+    ? 3
+    : error && /formato|grupo|playoff/i.test(error)
+      ? 2
+      : 1;
+---
+
+<Base
+  title={`Nuevo torneo · ${org.name} | Chapi`}
+  description={`Publica un torneo para ${org.name}.`}
+  noIndex={true}
+>
+  <main class="wiz">
+    <div class="wiz__card">
+      <div class="wiz__header">
+        <span class="accent-line"></span>
+        <p class="wiz__kicker">
+          <a href={`/orgs/${org.slug}`}>{org.name}</a>
+        </p>
+        <h1 class="display-md" style="margin-top: 8px;">Nuevo torneo</h1>
+        <p class="wiz__lead">Datos, formato, equipos y calendario.</p>
+      </div>
+
+      <ol class="wiz__steps" id="wiz-steps" aria-label="Pasos">
+        <li><button type="button" class="wiz__step is-active" data-goto="1">1. Datos</button></li>
+        <li><button type="button" class="wiz__step" data-goto="2">2. Formato</button></li>
+        <li><button type="button" class="wiz__step" data-goto="3">3. Equipos</button></li>
+        <li><button type="button" class="wiz__step" data-goto="4">4. Fixture</button></li>
+      </ol>
+
+      {error && (
+        <div class="auth-error" role="alert">{error}</div>
+      )}
+
+      <form method="POST" class="wiz__form" id="wiz-form">
+        <section class="wiz__panel is-active" data-step="1">
+          <div class="form-field">
+            <label class="label" for="name">Nombre</label>
+            <input type="text" id="name" name="name" required
+              value={draft.name}
+              placeholder="Liga de barrio 2026" class="form-input" />
+          </div>
+
+          <div class="form-field">
+            <label class="label" for="sport">Deporte</label>
+            <select id="sport" name="sport" required class="form-input">
+              {WIZARD_SPORTS.map(s => (
+                <option value={s.id} selected={draft.sport === s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="wiz__row">
+            <div class="form-field">
+              <label class="label" for="startDate">Inicio</label>
+              <input type="date" id="startDate" name="startDate" required
+                value={draft.startDate} class="form-input" />
+            </div>
+            <div class="form-field">
+              <label class="label" for="endDate">Fin</label>
+              <input type="date" id="endDate" name="endDate" required
+                value={draft.endDate} class="form-input" />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="label" for="brandColor">Color de marca</label>
+            <div class="wiz__color">
+              <input type="color" id="brandColorPicker" value={draft.brandColor || '#00e5ff'}
+                aria-label="Elegir color" />
+              <input type="text" id="brandColor" name="brandColor"
+                value={draft.brandColor} placeholder="#00e5ff"
+                pattern="^#?[0-9A-Fa-f]{6}$" class="form-input" />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="label" for="logoUrl">URL del logo (opcional)</label>
+            <input type="url" id="logoUrl" name="logoUrl"
+              value={draft.logoUrl} placeholder="https://…" class="form-input" />
+          </div>
+
+          <div class="form-field">
+            <label class="label" for="backgroundImageUrl">URL de portada (opcional)</label>
+            <input type="url" id="backgroundImageUrl" name="backgroundImageUrl"
+              value={draft.backgroundImageUrl} placeholder="https://…" class="form-input" />
+          </div>
+
+          <div class="form-field">
+            <label class="label" for="description">Descripción</label>
+            <textarea id="description" name="description" rows="3"
+              placeholder="Qué se juega, quién organiza, dónde…"
+              class="form-input form-input--area">{draft.description}</textarea>
+          </div>
+        </section>
+
+        <section class="wiz__panel" data-step="2">
+          <fieldset class="wiz__choices">
+            <legend class="label">Cómo se juega</legend>
+            <label class="wiz__choice">
+              <input type="radio" name="format" value="league" required
+                checked={draft.format === 'league'} />
+              <span>
+                <strong>Liga</strong>
+                Tabla única. Todos los equipos en una sola clasificación.
+              </span>
+            </label>
+            <label class="wiz__choice">
+              <input type="radio" name="format" value="groups"
+                checked={draft.format === 'groups'} />
+              <span>
+                <strong>Grupos</strong>
+                Varias zonas (Grupo A, B…) y tabla por grupo.
+              </span>
+            </label>
+          </fieldset>
+
+          <div class="wiz__groups-only" id="groups-only" hidden={draft.format !== 'groups'}>
+            <div class="form-field">
+              <label class="label" for="groupCount">Número de grupos</label>
+              <input type="number" id="groupCount" name="groupCount"
+                min="2" max="8" value={draft.groupCount} class="form-input" />
+            </div>
+
+            <label class="wiz__check">
+              <input type="checkbox" name="hasPlayoffs" checked={draft.hasPlayoffs} />
+              Hay playoffs (cruces después de la fase de grupos)
+            </label>
+
+            <div class="form-field" id="spots-field" hidden={!draft.hasPlayoffs}>
+              <label class="label" for="qualifyingSpots">Clasifican por grupo</label>
+              <input type="number" id="qualifyingSpots" name="qualifyingSpots"
+                min="1" max="8" value={draft.qualifyingSpots} class="form-input" />
+            </div>
+          </div>
+        </section>
+
+        <section class="wiz__panel" data-step="3">
+          <p class="wiz__hint">Mínimo 2 equipos. La abreviación son 2–4 letras (NAL, MIL).</p>
+          <div id="team-list" class="wiz__teams">
+            {draft.teams.map((team, i) => (
+              <div class="team-row">
+                <input type="text" name="teamName" value={team.name}
+                  placeholder="Nombre del equipo" class="form-input" autocomplete="off" />
+                <input type="text" name="teamShort" value={team.shortName}
+                  placeholder="ABC" maxlength="4" class="form-input team-row__short"
+                  autocomplete="off" />
+                <input type="color" name="teamColor" value={team.color}
+                  class="team-row__color" aria-label="Color del equipo" />
+                <select name="teamGroup" class="form-input team-row__group"
+                  hidden={draft.format !== 'groups'}>
+                  {groupOptions.map(opt => (
+                    <option value={opt.value} selected={team.groupIndex === opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" class="team-row__remove" aria-label={`Quitar equipo ${i + 1}`}>×</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" class="btn-ghost" id="add-team" style="align-self:flex-start;">
+            Agregar equipo
+          </button>
+        </section>
+
+        <section class="wiz__panel" data-step="4">
+          <fieldset class="wiz__choices">
+            <legend class="label">Calendario</legend>
+            <label class="wiz__choice">
+              <input type="radio" name="fixtureMode" value="generate" required
+                checked={draft.fixtureMode !== 'skip'} />
+              <span>
+                <strong>Generar todos-contra-todos</strong>
+                Jornadas automáticas entre las fechas del torneo.
+              </span>
+            </label>
+            <label class="wiz__choice">
+              <input type="radio" name="fixtureMode" value="skip"
+                checked={draft.fixtureMode === 'skip'} />
+              <span>
+                <strong>Publicar sin fixture</strong>
+                El torneo sale con equipos y tabla en 0. Puedes cargarlo después.
+              </span>
+            </label>
+          </fieldset>
+
+          <div class="wiz__groups-only" id="fixture-opts" hidden={draft.fixtureMode === 'skip'}>
+            <p class="wiz__hint" id="fixture-preview"></p>
+            <label class="wiz__check">
+              <input type="checkbox" name="doubleRound" checked={draft.doubleRound} />
+              Ida y vuelta (cada pareja se enfrenta dos veces)
+            </label>
+            <div class="wiz__row">
+              <div class="form-field">
+                <label class="label" for="kickoff">Hora</label>
+                <input type="time" id="kickoff" name="kickoff" value={draft.kickoff || '15:00'}
+                  class="form-input" />
+              </div>
+              <div class="form-field">
+                <label class="label" for="venue">Sede (opcional)</label>
+                <input type="text" id="venue" name="venue" value={draft.venue}
+                  placeholder="Estadio, coliseo…" class="form-input" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="wiz__nav">
+          <button type="button" class="btn-ghost" id="wiz-prev" hidden>Atrás</button>
+          <a href={`/orgs/${org.slug}`} class="btn-ghost" id="wiz-cancel">Cancelar</a>
+          <button type="button" class="btn-accent" id="wiz-next">Siguiente</button>
+          <button type="submit" class="btn-accent" id="wiz-submit" hidden>Publicar torneo</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</Base>
+
+<style>
+.wiz {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 72px;
+}
+.wiz__card {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+}
+.wiz__header { margin-bottom: 24px; }
+.wiz__kicker {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 10px 0 0;
+}
+.wiz__kicker a { color: var(--accent); }
+.wiz__lead {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-top: 6px;
+}
+.wiz__steps {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  flex-wrap: wrap;
+}
+.wiz__step {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
+.wiz__step.is-active {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.auth-error {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+.wiz__form { display: flex; flex-direction: column; gap: 20px; }
+.wiz__panel { display: none; flex-direction: column; gap: 20px; }
+.wiz__panel.is-active { display: flex; }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+  outline: none;
+  width: 100%;
+}
+select.form-input { appearance: none; }
+.form-input--area { border-radius: var(--radius-lg); resize: vertical; min-height: 80px; }
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text-muted); }
+.wiz__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.wiz__color { display: flex; align-items: center; gap: 10px; }
+.wiz__color input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.wiz__choices { border: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.wiz__choice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+.wiz__choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.wiz__choice strong { display: block; font-family: var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }
+.wiz__choice span { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; }
+.wiz__choice input { margin-top: 3px; accent-color: var(--accent); }
+.wiz__groups-only { display: flex; flex-direction: column; gap: 16px; }
+.wiz__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.wiz__check input { accent-color: var(--accent); }
+.wiz__hint { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+.wiz__teams { display: flex; flex-direction: column; gap: 10px; }
+.team-row {
+  display: grid;
+  grid-template-columns: 1fr 72px 40px minmax(110px, 140px) 36px;
+  gap: 8px;
+  align-items: center;
+}
+.team-row__short { text-transform: uppercase; text-align: center; padding-left: 8px; padding-right: 8px; }
+.team-row__color {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.team-row__remove {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.team-row__remove:hover { background: var(--bg-raised); color: var(--text-primary); }
+.wiz__nav {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .wiz__card { padding: 28px 20px; }
+  .wiz__row { grid-template-columns: 1fr; }
+  .team-row {
+    grid-template-columns: 1fr 64px 36px 36px;
+  }
+  .team-row__group { grid-column: 1 / -1; }
+}
+</style>
+
+<script define:vars={{ startStep }}>
+  const form = document.getElementById('wiz-form');
+  if (form) {
+    let step = 1;
+    const total = 4;
+    const steps = document.querySelectorAll('.wiz__step');
+    const panels = document.querySelectorAll('.wiz__panel');
+    const prev = document.getElementById('wiz-prev');
+    const next = document.getElementById('wiz-next');
+    const submit = document.getElementById('wiz-submit');
+    const cancel = document.getElementById('wiz-cancel');
+    const groupsOnly = document.getElementById('groups-only');
+    const spotsField = document.getElementById('spots-field');
+    const groupCountInput = document.getElementById('groupCount');
+    const teamList = document.getElementById('team-list');
+    const colors = ['#00e5ff', '#f97316', '#22c55e', '#a855f7', '#eab308', '#ef4444', '#3b82f6', '#ec4899'];
+
+    function isGroups() {
+      const checked = form.querySelector('input[name="format"]:checked');
+      return checked && checked.value === 'groups';
+    }
+
+    function groupLabels() {
+      const n = Math.min(8, Math.max(2, Number(groupCountInput.value) || 2));
+      return Array.from({ length: n }, (_, i) => `Grupo ${String.fromCharCode(65 + i)}`);
+    }
+
+    function syncGroupSelects() {
+      const labels = groupLabels();
+      const show = isGroups();
+      teamList.querySelectorAll('select[name="teamGroup"]').forEach(sel => {
+        const current = sel.value;
+        sel.innerHTML = labels.map((label, i) =>
+          `<option value="${i}" ${String(i) === current ? 'selected' : ''}>${label}</option>`
+        ).join('');
+        sel.hidden = !show;
+      });
+    }
+
+    function showStep(n) {
+      step = n;
+      panels.forEach(p => p.classList.toggle('is-active', Number(p.dataset.step) === n));
+      steps.forEach(s => s.classList.toggle('is-active', Number(s.dataset.goto) === n));
+      prev.hidden = n === 1;
+      cancel.hidden = n !== 1;
+      next.hidden = n === total;
+      submit.hidden = n !== total;
+    }
+
+    function validateStep(n) {
+      const panel = document.querySelector(`.wiz__panel[data-step="${n}"]`);
+      if (!panel) return true;
+      const fields = panel.querySelectorAll('input, select, textarea');
+      for (const field of fields) {
+        if (field.hidden || field.closest('[hidden]')) continue;
+        if (!field.checkValidity()) {
+          field.reportValidity();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    prev.addEventListener('click', () => showStep(Math.max(1, step - 1)));
+    steps.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = Number(btn.dataset.goto);
+        if (target > step && !validateStep(step)) return;
+        showStep(target);
+        if (target === 4) updateFixturePreview();
+      });
+    });
+
+    form.querySelectorAll('input[name="format"]').forEach(r => {
+      r.addEventListener('change', () => {
+        if (groupsOnly) groupsOnly.hidden = !isGroups();
+        syncGroupSelects();
+        updateFixturePreview();
+      });
+    });
+
+    const playoffs = form.querySelector('input[name="hasPlayoffs"]');
+    if (playoffs) {
+      playoffs.addEventListener('change', e => {
+        if (spotsField) spotsField.hidden = !e.currentTarget.checked;
+      });
+    }
+
+    const fixtureOpts = document.getElementById('fixture-opts');
+    const fixturePreview = document.getElementById('fixture-preview');
+
+    function rrCount(n, double) {
+      if (n < 2) return 0;
+      const single = n * (n - 1) / 2;
+      return double ? single * 2 : single;
+    }
+
+    function updateFixturePreview() {
+      if (!fixturePreview) return;
+      const names = [...form.querySelectorAll('input[name="teamName"]')]
+        .map(el => el.value.trim())
+        .filter(Boolean);
+      const double = !!form.querySelector('input[name="doubleRound"]')?.checked;
+      let count = 0;
+      if (isGroups()) {
+        const groups = {};
+        form.querySelectorAll('.team-row').forEach(row => {
+          const name = row.querySelector('input[name="teamName"]')?.value.trim();
+          if (!name) return;
+          const g = row.querySelector('select[name="teamGroup"]')?.value ?? '0';
+          groups[g] = (groups[g] || 0) + 1;
+        });
+        count = Object.values(groups).reduce((sum, n) => sum + rrCount(n, double), 0);
+      } else {
+        count = rrCount(names.length, double);
+      }
+      fixturePreview.textContent = count > 0
+        ? `Se crearán ${count} partido${count === 1 ? '' : 's'} programados.`
+        : 'Agrega al menos 2 equipos para generar el fixture.';
+    }
+
+    form.querySelectorAll('input[name="fixtureMode"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const skip = form.querySelector('input[name="fixtureMode"]:checked')?.value === 'skip';
+        if (fixtureOpts) fixtureOpts.hidden = skip;
+        updateFixturePreview();
+      });
+    });
+    form.querySelector('input[name="doubleRound"]')?.addEventListener('change', updateFixturePreview);
+    teamList.addEventListener('input', updateFixturePreview);
+
+    next.addEventListener('click', () => {
+      if (!validateStep(step)) return;
+      const nextStep = Math.min(total, step + 1);
+      showStep(nextStep);
+      if (nextStep === 4) updateFixturePreview();
+    });
+
+    groupCountInput.addEventListener('change', syncGroupSelects);
+
+    const brandPicker = document.getElementById('brandColorPicker');
+    const brandText = document.getElementById('brandColor');
+    if (brandPicker && brandText) {
+      brandPicker.addEventListener('input', () => {
+        brandText.value = brandPicker.value;
+      });
+      brandText.addEventListener('input', () => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(brandText.value)) {
+          brandPicker.value = brandText.value;
+        }
+      });
+    }
+
+    document.getElementById('add-team')?.addEventListener('click', () => {
+      const first = teamList.querySelector('.team-row');
+      if (!first) return;
+      const node = first.cloneNode(true);
+      node.querySelectorAll('input[type="text"]').forEach(el => { el.value = ''; });
+      const color = node.querySelector('input[name="teamColor"]');
+      if (color) color.value = colors[teamList.children.length % colors.length];
+      teamList.appendChild(node);
+      syncGroupSelects();
+    });
+
+    teamList.addEventListener('click', e => {
+      const btn = e.target.closest('.team-row__remove');
+      if (!btn) return;
+      if (teamList.querySelectorAll('.team-row').length <= 2) return;
+      btn.closest('.team-row')?.remove();
+    });
+
+    teamList.addEventListener('input', e => {
+      if (e.target.name === 'teamShort') e.target.value = e.target.value.toUpperCase();
+    });
+
+    showStep(typeof startStep === 'number' ? startStep : 1);
+    syncGroupSelects();
+    updateFixturePreview();
+  }
+</script>

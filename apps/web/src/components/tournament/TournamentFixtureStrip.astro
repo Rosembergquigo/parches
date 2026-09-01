@@ -1,0 +1,275 @@
+---
+/**
+ * TournamentFixtureStrip.astro — primer componente principal de la página
+ * de torneo: el Fixture / Navegador de fechas.
+ *
+ * Sigue la estética de TournamentRow (icono de deporte + título + tira
+ * horizontal de MatchCard con scroll), pero en vez de un link "Ver torneo"
+ * incluye un <select> para saltar entre fechas: jornadas regulares
+ * ("Jornada 1", "Grupo A"...) y, si el torneo tiene playoffs habilitados,
+ * también las rondas de eliminación ("Cuartos de final", "Semifinal"...)
+ * — todas como opciones planas de un mismo dropdown.
+ *
+ * Selección por defecto: la fecha con un partido en vivo; si no hay,
+ * la próxima con partidos programados; si no, la última jugada.
+ *
+ * Si el torneo tiene playoffs, un botón adicional revela el bracket
+ * gráfico completo (PlayoffBracket) sin necesidad de una pestaña aparte.
+ */
+import SportIcon from '../ui/SportIcon.astro';
+import MatchCard from '../match/MatchCard.astro';
+import PlayoffBracket from './PlayoffBracket.astro';
+import type { MatchGroup, Sport } from '../../data/mock';
+
+interface Props {
+  groups?: MatchGroup[];
+  playoffGroups?: MatchGroup[];
+  showPlayoffs?: boolean;
+  sport: Sport;
+  brandColor?: string;
+}
+
+const {
+  groups = [],
+  playoffGroups = [],
+  showPlayoffs = false,
+  sport,
+  brandColor,
+} = Astro.props;
+
+// Unifica jornadas regulares + rondas de playoffs en un solo listado de
+// "fechas" navegables desde el dropdown.
+const stages: MatchGroup[] = [...groups, ...(showPlayoffs ? playoffGroups : [])];
+
+const hasStages = stages.length > 0;
+const hasBracket = showPlayoffs && playoffGroups.length > 0;
+
+const liveIdx     = stages.findIndex(s => s.matches.some(m => m.status === 'LIVE'));
+const upcomingIdx = stages.findIndex(s => s.matches.some(m => m.status === 'SCHEDULED'));
+const defaultIndex =
+  liveIdx >= 0 ? liveIdx :
+  upcomingIdx >= 0 ? upcomingIdx :
+  Math.max(stages.length - 1, 0);
+---
+
+{hasStages && (
+  <section class="tfs" id="tournamentFixtureStrip" aria-label="Fixture del torneo">
+
+    <!-- Header: icono + título + controles -->
+    <div class="tfs__header">
+      <div class="tfs__left">
+        <div class:list={['sport-icon', `sport-icon--${sport}`]} aria-hidden="true">
+          <SportIcon sport={sport} size={16} />
+        </div>
+        <h2 class="tfs__title">Fixture</h2>
+      </div>
+
+      <div class="tfs__controls">
+        {hasBracket && (
+          <button type="button" class="tfs__bracket-btn" id="tfsBracketToggle">
+            Ver bracket completo
+          </button>
+        )}
+        <div class="tfs__select-wrap">
+          <select id="tfsSelect" class="tfs__select" aria-label="Elegir fecha o jornada">
+            {stages.map((s, i) => (
+              <option value={i} selected={i === defaultIndex}>{s.label}</option>
+            ))}
+          </select>
+          <svg class="tfs__select-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panels: una tira de MatchCards por fecha -->
+    {stages.map((s, i) => (
+      <div class="tfs__panel" data-tfs-panel={i} hidden={i !== defaultIndex}>
+        {s.matches.length > 0 ? (
+          <div class="tfs__strip" role="list" aria-label={`Partidos de ${s.label}`}>
+            {s.matches.map(m => (
+              <div role="listitem">
+                <MatchCard match={m} sport={sport} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="tfs__empty">Sin partidos programados en esta fecha.</p>
+        )}
+      </div>
+    ))}
+
+    <!-- Bracket gráfico completo (oculto por defecto) -->
+    {hasBracket && (
+      <div class="tfs__bracket" id="tfsBracket" hidden>
+        <PlayoffBracket rounds={playoffGroups} brandColor={brandColor} />
+      </div>
+    )}
+
+  </section>
+)}
+
+<style>
+.tfs {
+  padding: 24px 24px 8px;
+}
+
+/* Header */
+.tfs__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tfs__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sport-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sport-icon--football   { background: linear-gradient(135deg, #0a1e12, #1a4d2e); }
+.sport-icon--basketball { background: linear-gradient(135deg, #1e120a, #4d2e0a); }
+.sport-icon--tennis     { background: linear-gradient(135deg, #141e08, #2e4d0a); }
+.sport-icon--volleyball { background: linear-gradient(135deg, #08122b, #0a2e4d); }
+.sport-icon--baseball   { background: linear-gradient(135deg, #1e0a12, #4d0a2e); }
+.sport-icon--hockey     { background: linear-gradient(135deg, #0e0a1e, #1a0a4d); }
+.tfs__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Controls */
+.tfs__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tfs__bracket-btn {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+.tfs__bracket-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.tfs__bracket-btn--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(0,229,255,0.35);
+}
+
+.tfs__select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tfs__select {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 8px 30px 8px 12px;
+  cursor: pointer;
+  transition: border-color var(--transition);
+  max-width: 220px;
+}
+.tfs__select:hover, .tfs__select:focus { border-color: var(--border-hover); outline: none; }
+.tfs__select-arrow {
+  position: absolute;
+  right: 10px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* Panels + strip (misma estética que TournamentRow) */
+.tfs__panel { display: block; }
+.tfs__panel[hidden] { display: none; }
+
+.tfs__strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+  -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tfs__strip::-webkit-scrollbar { height: 2px; }
+.tfs__strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.tfs__empty {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* Bracket toggle panel */
+.tfs__bracket {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+</style>
+
+<script>
+  (function () {
+    const root = document.getElementById('tournamentFixtureStrip');
+    if (!root) return;
+
+    const select = root.querySelector<HTMLSelectElement>('#tfsSelect');
+    const panels = root.querySelectorAll<HTMLElement>('[data-tfs-panel]');
+    select?.addEventListener('change', () => {
+      const idx = select.value;
+      panels.forEach(panel => {
+        panel.hidden = panel.getAttribute('data-tfs-panel') !== idx;
+      });
+    });
+
+    const bracketBtn = document.getElementById('tfsBracketToggle');
+    const bracket = document.getElementById('tfsBracket');
+    bracketBtn?.addEventListener('click', () => {
+      if (!bracket) return;
+      const willShow = !!bracket.hidden;
+      bracket.hidden = !willShow;
+      bracketBtn.classList.toggle('tfs__bracket-btn--active', willShow);
+      bracketBtn.textContent = willShow ? 'Ocultar bracket' : 'Ver bracket completo';
+    });
+  })();
+</script>

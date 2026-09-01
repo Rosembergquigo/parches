@@ -7,16 +7,22 @@
  *   SCHEDULED → barra cyan, hora formateada, "Programar"
  *   FINISHED  → sin barra, "FT", score opaco, "Resumen"
  *
+ * Hero: escudos de ambos equipos sobre un degradado con un cambio
+ * de color justo en la mitad (efecto "vs"). El degradado usa el
+ * color de marca de cada equipo (team.color); si algún equipo no
+ * lo define, cae al duotono genérico del deporte.
+ *
  * Navega directamente a /matches/[id] — sin pasar por el torneo.
- * La prop `venue` y `period` son opcionales.
+ * La prop `venue`, `period` y `sport` son opcionales.
  */
-import type { MatchSnippet } from '../../data/mock';
+import type { MatchSnippet, Sport } from '../../data/mock';
 
 interface Props {
   match: MatchSnippet;
+  sport?: Sport;
 }
 
-const { match } = Astro.props;
+const { match, sport } = Astro.props;
 const { homeTeam, awayTeam, homeScore, awayScore, status, clock, period, venue,
         scheduledAt, viewerCount, id } = match;
 
@@ -26,6 +32,25 @@ const isFinished  = status === 'FINISHED';
 
 const homeWins = homeScore > awayScore;
 const awayWins = awayScore > homeScore;
+
+// ── Hero gradient: color de cada equipo, con el cambio justo en la mitad ──
+// Fallback: duotono genérico por deporte cuando algún equipo no tiene color.
+const sportDuo: Record<string, [string, string]> = {
+  football:   ['#0a1e12', '#1a4d2e'],
+  basketball: ['#1e120a', '#4d2e0a'],
+  tennis:     ['#141e08', '#2e4d0a'],
+  volleyball: ['#08122b', '#0a2e4d'],
+  baseball:   ['#1e0a12', '#4d0a2e'],
+  hockey:     ['#0e0a1e', '#1a0a4d'],
+};
+const [fallbackA, fallbackB] = sportDuo[sport ?? ''] ?? ['#15171c', '#242833'];
+const colorA = homeTeam.color ?? fallbackA;
+const colorB = awayTeam.color ?? fallbackB;
+// Se mezcla con negro para que el color del equipo no rompa el tema oscuro
+// y mantenga contraste con el texto/escudos blancos del hero.
+const shadeA = `color-mix(in srgb, ${colorA} 55%, #05070a 45%)`;
+const shadeB = `color-mix(in srgb, ${colorB} 55%, #05070a 45%)`;
+const heroBg = `linear-gradient(90deg, ${shadeA} 0%, ${shadeA} 44%, ${shadeB} 56%, ${shadeB} 100%)`;
 
 // Format scheduled time
 function formatScheduled(iso?: string): string {
@@ -58,21 +83,37 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   class:list={['mc', isLive && 'mc--live', isScheduled && 'mc--scheduled', isFinished && 'mc--finished']}
   aria-label={`${homeTeam.name} vs ${awayTeam.name}`}
 >
-  <!-- Top bar: status + clock -->
-  <div class="mc__top">
-    {isLive && (
-      <div class="mc__status mc__status--live">
-        <span class="mc__live-dot" aria-hidden="true"></span>
-        En vivo
+  <!-- Hero: escudos + degradado por deporte con cambio en la mitad -->
+  <div class="mc__hero" style={`background: ${heroBg}`}>
+    <div class="mc__hero-top">
+      {isLive && (
+        <div class="mc__status mc__status--live">
+          <span class="mc__live-dot" aria-hidden="true"></span>
+          En vivo
+        </div>
+      )}
+      {isScheduled && (
+        <div class="mc__status mc__status--soon">{scheduledLabel}</div>
+      )}
+      {isFinished && (
+        <div class="mc__status mc__status--fin">Finalizado</div>
+      )}
+      <div class="mc__clock">{isLive ? clock : isFinished ? 'FT' : '−'}</div>
+    </div>
+
+    <div class="mc__hero-crests">
+      <div class="mc__crest" aria-hidden="true">
+        {homeTeam.logoUrl
+          ? <img src={homeTeam.logoUrl} alt="" loading="lazy" />
+          : <span>{homeTeam.shortName}</span>}
       </div>
-    )}
-    {isScheduled && (
-      <div class="mc__status mc__status--soon">{scheduledLabel}</div>
-    )}
-    {isFinished && (
-      <div class="mc__status mc__status--fin">Finalizado</div>
-    )}
-    <div class="mc__clock">{isLive ? clock : isFinished ? 'FT' : '−'}</div>
+      <span class="mc__vs">VS</span>
+      <div class="mc__crest" aria-hidden="true">
+        {awayTeam.logoUrl
+          ? <img src={awayTeam.logoUrl} alt="" loading="lazy" />
+          : <span>{awayTeam.shortName}</span>}
+      </div>
+    </div>
   </div>
 
   <!-- Teams + scores -->
@@ -118,7 +159,7 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 /* ── Base card ──────────────────────────────────────────── */
 .mc {
   flex-shrink: 0;
-  width: 200px;
+  width: 400px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -133,13 +174,14 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   transform: translateY(-3px);
 }
 
-/* top accent line by state */
+/* top accent line by state — sits above the hero */
 .mc--live::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
   background: var(--live);
+  z-index: 3;
 }
 .mc--scheduled::before {
   content: '';
@@ -147,17 +189,28 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   top: 0; left: 0; right: 0;
   height: 2px;
   background: var(--accent);
+  z-index: 3;
 }
 .mc--live:hover    { border-color: rgba(255, 59, 59, 0.4); }
 .mc--scheduled:hover { border-color: rgba(0, 229, 255, 0.4); }
 .mc--finished:hover  { border-color: var(--border-hover); }
 
-/* ── Top row ──────────────────────────────────────────── */
-.mc__top {
+/* ── Hero: escudos + degradado con cambio en la mitad ──── */
+.mc__hero {
+  position: relative;
+  height: 200px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.mc__hero-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 0;
+  position: relative;
+  z-index: 2;
 }
 .mc__status {
   font-family: var(--font-display);
@@ -170,8 +223,8 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   gap: 4px;
 }
 .mc__status--live { color: var(--live); }
-.mc__status--soon { color: var(--text-secondary); }
-.mc__status--fin  { color: var(--text-muted); }
+.mc__status--soon { color: rgba(255, 255, 255, 0.75); }
+.mc__status--fin  { color: rgba(255, 255, 255, 0.5); }
 
 .mc__live-dot {
   width: 5px;
@@ -191,12 +244,56 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.mc__hero-crests {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.mc__crest {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mc__crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 5px;
+}
+.mc__crest span {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.85);
+}
+.mc__vs {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
 }
 
 /* ── Body: teams ────────────────────────────────────────── */
 .mc__body {
   padding: 10px 12px 6px;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 .mc__team-row {
   display: flex;
@@ -264,6 +361,7 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ── Footer ─────────────────────────────────────────────── */
@@ -273,6 +371,7 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 .mc__viewers {
   font-family: var(--font-display);

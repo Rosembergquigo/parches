@@ -5,7 +5,7 @@
   --font-display: Helvetica,'Barlow Condensed', sans-serif;
   --font-body:    Helvetica, 'Barlow', sans-serif;
 
-  --bg-base:      #0a0c0f;
+  --bg-base:      #17171b;
   --bg-surface:   #111418;
   --bg-raised:    #181c22;
   --bg-overlay:   #1e232b;
@@ -30,6 +30,12 @@
   --radius-sm:  4px;
   --radius-md:  8px;
   --radius-lg:  12px;
+  /* Pill / fully-rounded corners para botones y campos de texto en toda
+     la app — un valor grande a propósito: el navegador lo recorta al
+     máximo posible (mitad del lado más corto), así un botón rectangular
+     queda en forma de píldora y uno cuadrado (icon button) queda circular,
+     sin necesidad de dos variables distintas. */
+  --radius-pill: 8rem;
 
   --transition: 150ms ease;
 }
@@ -142,7 +148,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   transition: opacity var(--transition), transform var(--transition);
 }
 .btn-accent:hover { opacity: 0.88; transform: translateY(-1px); }
@@ -160,7 +166,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   letter-spacing: 0.05em;
   text-transform: uppercase;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   transition: border-color var(--transition), background var(--transition);
 }
 .btn-ghost:hover { border-color: var(--border-hover); background: var(--bg-raised); }

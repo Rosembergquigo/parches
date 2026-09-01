@@ -18,6 +18,7 @@ export interface TeamSnippet {
   name: string;
   shortName: string;       // 3 letras para el logo placeholder
   logoUrl?: string;
+  color?: string;           // color de marca del equipo (hex) — usado en el degradado del hero de MatchCard
 }
 
 export interface MatchSnippet {
@@ -60,8 +61,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
     matches: [
       {
         id: 'm1',
-        homeTeam: { id: 'med', name: 'Independiente Medellín', shortName: 'MED' },
-        awayTeam: { id: 'mil', name: 'Millonarios FC', shortName: 'MIL' },
+        homeTeam: { id: 'med', name: 'Independiente Medellín', shortName: 'MED', color: '#E4572E' },
+        awayTeam: { id: 'mil', name: 'Millonarios FC', shortName: 'MIL', color: '#005BAA' },
         homeScore: 2, awayScore: 1,
         status: 'LIVE',
         clock: "67'", period: '2do Tiempo',
@@ -70,8 +71,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
       },
       {
         id: 'm2',
-        homeTeam: { id: 'ame', name: 'América de Cali', shortName: 'AME' },
-        awayTeam: { id: 'jun', name: 'Junior FC', shortName: 'JUN' },
+        homeTeam: { id: 'ame', name: 'América de Cali', shortName: 'AME', color: '#C8102E' },
+        awayTeam: { id: 'jun', name: 'Junior FC', shortName: 'JUN', color: '#FFB81C' },
         homeScore: 0, awayScore: 0,
         status: 'LIVE',
         clock: "34'", period: '1er Tiempo',
@@ -80,8 +81,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
       },
       {
         id: 'm3',
-        homeTeam: { id: 'nal', name: 'Atlético Nacional', shortName: 'NAL' },
-        awayTeam: { id: 'cal', name: 'Deportivo Cali', shortName: 'CAL' },
+        homeTeam: { id: 'nal', name: 'Atlético Nacional', shortName: 'NAL', color: '#159F42' },
+        awayTeam: { id: 'cal', name: 'Deportivo Cali', shortName: 'CAL', color: '#6CACE4' },
         homeScore: 0, awayScore: 0,
         status: 'SCHEDULED',
         clock: '−', period: 'Clásico del Valle',
@@ -90,8 +91,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
       },
       {
         id: 'm4',
-        homeTeam: { id: 'san', name: 'Santa Fe', shortName: 'SAN' },
-        awayTeam: { id: 'pas', name: 'Deportivo Pasto', shortName: 'PAS' },
+        homeTeam: { id: 'san', name: 'Santa Fe', shortName: 'SAN', color: '#E4032B' },
+        awayTeam: { id: 'pas', name: 'Deportivo Pasto', shortName: 'PAS', color: '#6B21A8' },
         homeScore: 3, awayScore: 1,
         status: 'FINISHED',
         clock: 'FT', period: 'Resultado final',
@@ -109,8 +110,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
     matches: [
       {
         id: 'm5',
-        homeTeam: { id: 'buc', name: 'Búcaros de Bucaramanga', shortName: 'BUC' },
-        awayTeam: { id: 'pir', name: 'Piratas de Bogotá', shortName: 'PIR' },
+        homeTeam: { id: 'buc', name: 'Búcaros de Bucaramanga', shortName: 'BUC', color: '#F5A623' },
+        awayTeam: { id: 'pir', name: 'Piratas de Bogotá', shortName: 'PIR', color: '#7C1D1D' },
         homeScore: 58, awayScore: 61,
         status: 'LIVE',
         clock: 'Q3 · 08:22', period: 'Juego 3 de 5',
@@ -118,8 +119,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
       },
       {
         id: 'm6',
-        homeTeam: { id: 'coc', name: 'Cocodrilos del Chocó', shortName: 'COC' },
-        awayTeam: { id: 'vaq', name: 'Vaqueros de Montería', shortName: 'VAQ' },
+        homeTeam: { id: 'coc', name: 'Cocodrilos del Chocó', shortName: 'COC', color: '#16A34A' },
+        awayTeam: { id: 'vaq', name: 'Vaqueros de Montería', shortName: 'VAQ', color: '#2563EB' },
         homeScore: 0, awayScore: 0,
         status: 'SCHEDULED',
         clock: '−', period: 'Juego 4',
@@ -137,8 +138,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
     matches: [
       {
         id: 'm7',
-        homeTeam: { id: 'cab', name: 'Cabal', shortName: 'CAB' },
-        awayTeam: { id: 'gar', name: 'García', shortName: 'GAR' },
+        homeTeam: { id: 'cab', name: 'Cabal', shortName: 'CAB', color: '#0EA5E9' },
+        awayTeam: { id: 'gar', name: 'García', shortName: 'GAR', color: '#F59E0B' },
         homeScore: 1, awayScore: 1,
         status: 'LIVE',
         clock: 'Set 3', period: 'Set 3 en curso',
@@ -157,8 +158,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
     matches: [
       {
         id: 'm8',
-        homeTeam: { id: 'col', name: 'Colombia', shortName: 'COL' },
-        awayTeam: { id: 'bra', name: 'Brasil', shortName: 'BRA' },
+        homeTeam: { id: 'col', name: 'Colombia', shortName: 'COL', color: '#FCD116' },
+        awayTeam: { id: 'bra', name: 'Brasil', shortName: 'BRA', color: '#009C3B' },
         homeScore: 0, awayScore: 0,
         status: 'SCHEDULED',
         clock: '−',
@@ -176,8 +177,8 @@ export const MOCK_TOURNAMENTS: TournamentWithMatches[] = [
     matches: [
       {
         id: 'm9',
-        homeTeam: { id: 'cai', name: 'Caimanes de Barranquilla', shortName: 'CAI' },
-        awayTeam: { id: 'tor', name: 'Toros de Sincelejo', shortName: 'TOR' },
+        homeTeam: { id: 'cai', name: 'Caimanes de Barranquilla', shortName: 'CAI', color: '#15803D' },
+        awayTeam: { id: 'tor', name: 'Toros de Sincelejo', shortName: 'TOR', color: '#B91C1C' },
         homeScore: 4, awayScore: 3,
         status: 'LIVE',
         clock: '7° Inn', period: '7° Inning',
@@ -222,6 +223,12 @@ export interface MatchGroup {
   matches: MatchSnippet[];
 }
 
+/** Una tabla de posiciones de un grupo/zona ("Grupo A", "Zona Norte", ...). */
+export interface StandingsGroup {
+  label: string;
+  standings: StandingsRow[];
+}
+
 /**
  * Una fila de estadística de jugador.
  * `statValue`  → el número principal del ranking (goles, puntos, etc.)
@@ -260,9 +267,51 @@ export interface TournamentPolicies {
   playoffs: boolean;
 }
 
+/** Rol dentro de una empresa — independiente de User.role. */
+export type OrgRole = 'OWNER' | 'ADMIN' | 'EDITOR';
+
+/** Empresa del usuario autenticado (GET /organizations/me). */
+export interface OrganizationSummary {
+  id: string;
+  slug: string;
+  name: string;
+  logoUrl?: string;
+  brandColor?: string;
+  city?: string;
+  myRole: OrgRole;
+  memberCount: number;
+  tournamentCount: number;
+}
+
+/** Ficha pública de una empresa (GET /organizations/:slug). */
+export interface OrganizationDetail {
+  id: string;
+  slug: string;
+  name: string;
+  logoUrl?: string;
+  brandColor?: string;
+  description?: string;
+  city?: string;
+  createdAt: string;
+  myRole?: OrgRole;
+  memberCount: number;
+  tournamentCount: number;
+  tournaments: TournamentWithMatches[];
+}
+
 export interface TournamentDetail extends TournamentWithMatches {
   description?: string;
+  /** Tabla única — torneos sin fase de grupos. */
   standings?: StandingsRow[];
+  /**
+   * Varias tablas cuando hay muchos equipos (fase de grupos). Cuando está
+   * presente, StandingsTable muestra un tab por grupo más un tab
+   * "Clasificados" con la tabla compilada de los clasificados de cada grupo
+   * y los cruces sugeridos (1° vs último, 2° vs penúltimo, ...).
+   */
+  standingsGroups?: StandingsGroup[];
+  /** Cuántos equipos clasifican por grupo. Default 4 (ver StandingsTable). */
+  qualifyingSpots?: number;
   /** Regular-season / jornada groups for the Fixture section. */
   groups?: MatchGroup[];
   /**
@@ -273,6 +322,11 @@ export interface TournamentDetail extends TournamentWithMatches {
   playerStats?: StatConfig[];
   brandColor?: string;
   logoUrl?: string;
+  /**
+   * Imagen de fondo del header (subida por el organizador). Progressive
+   * enhancement: si no existe, el header usa el gradiente de `brandColor`.
+   */
+  backgroundImageUrl?: string;
   /**
    * Tournament feature flags (politicas).
    * `playoffs: true` unlocks the Playoffs mode inside Fixture (bracket map).
@@ -387,10 +441,53 @@ export const MOCK_TOURNAMENT_BETPLAY: TournamentDetail = {
   ],
 };
 
+// Fase de grupos del Sudamericano de Voleibol — 12 equipos en 3 grupos de 4.
+// Ejemplo de torneo con muchas tablas: StandingsTable arma un tab por grupo
+// más un tab "Clasificados" con la tabla compilada y los cruces sugeridos.
+const VOLEIBOL_GROUPS: StandingsGroup[] = [
+  {
+    label: 'Grupo A',
+    standings: [
+      { position: 1, team: { id: 'bra', name: 'Brasil', shortName: 'BRA', color: '#009C3B' }, played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 9, goalsAgainst: 2, points: 9 },
+      { position: 2, team: { id: 'col', name: 'Colombia', shortName: 'COL', color: '#FCD116' }, played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 7, goalsAgainst: 4, points: 6 },
+      { position: 3, team: { id: 'per', name: 'Perú', shortName: 'PER', color: '#D91023' }, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 4, goalsAgainst: 7, points: 3 },
+      { position: 4, team: { id: 'bol', name: 'Bolivia', shortName: 'BOL', color: '#007934' }, played: 3, won: 0, drawn: 0, lost: 3, goalsFor: 2, goalsAgainst: 9, points: 0 },
+    ],
+  },
+  {
+    label: 'Grupo B',
+    standings: [
+      { position: 1, team: { id: 'arg', name: 'Argentina', shortName: 'ARG', color: '#75AADB' }, played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 9, goalsAgainst: 1, points: 9 },
+      { position: 2, team: { id: 'chi', name: 'Chile', shortName: 'CHI', color: '#D52B1E' }, played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 6, goalsAgainst: 5, points: 6 },
+      { position: 3, team: { id: 'ecu', name: 'Ecuador', shortName: 'ECU', color: '#FFDD00' }, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 5, goalsAgainst: 7, points: 3 },
+      { position: 4, team: { id: 'par', name: 'Paraguay', shortName: 'PAR', color: '#D52B1E' }, played: 3, won: 0, drawn: 0, lost: 3, goalsFor: 1, goalsAgainst: 8, points: 0 },
+    ],
+  },
+  {
+    label: 'Grupo C',
+    standings: [
+      { position: 1, team: { id: 'ven', name: 'Venezuela', shortName: 'VEN', color: '#FFCC00' }, played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 7, goalsAgainst: 5, points: 6 },
+      { position: 2, team: { id: 'uru', name: 'Uruguay', shortName: 'URU', color: '#75AADB' }, played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 6, goalsAgainst: 4, points: 6 },
+      { position: 3, team: { id: 'mex', name: 'México', shortName: 'MEX', color: '#006847' }, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 5, goalsAgainst: 7, points: 3 },
+      { position: 4, team: { id: 'pan', name: 'Panamá', shortName: 'PAN', color: '#DA121A' }, played: 3, won: 0, drawn: 0, lost: 3, goalsFor: 2, goalsAgainst: 8, points: 0 },
+    ],
+  },
+];
+
 export function getMockTournamentBySlug(slug: string): TournamentDetail | null {
   if (slug === 'liga-betplay-2025') return MOCK_TOURNAMENT_BETPLAY;
   const found = MOCK_TOURNAMENTS.find(t => t.slug === slug);
   if (!found) return null;
+
+  if (found.slug === 'sudamericano-voleibol-2025') {
+    return {
+      ...found,
+      policies: { playoffs: false },
+      standingsGroups: VOLEIBOL_GROUPS,
+      qualifyingSpots: 2,
+      groups: [{ label: 'Partidos', matches: found.matches }],
+    };
+  }
 
   // Tournaments that are playoff-only: policy on, matches live under Playoffs
   const isPlayoffTournament =
@@ -918,10 +1015,19 @@ export interface TeamDetail {
   recentMatches: TeamMatchItem[];
 }
 
+/** Standings planas del torneo, vengan de `standings` o de `standingsGroups`. */
+export function getAllStandingsRows(tournament: TournamentDetail): StandingsRow[] {
+  if (tournament.standingsGroups?.length) {
+    return tournament.standingsGroups.flatMap(g => g.standings);
+  }
+  return tournament.standings ?? [];
+}
+
 /** Unique teams from standings, else from match home/away. */
 export function getTeamsForTournament(tournament: TournamentDetail): TeamSnippet[] {
-  if (tournament.standings?.length) {
-    return tournament.standings.map(row => row.team);
+  const rows = getAllStandingsRows(tournament);
+  if (rows.length) {
+    return rows.map(row => row.team);
   }
   const byId = new Map<string, TeamSnippet>();
   for (const m of tournament.matches) {
@@ -929,6 +1035,66 @@ export function getTeamsForTournament(tournament: TournamentDetail): TeamSnippet
     byId.set(m.awayTeam.id, m.awayTeam);
   }
   return [...byId.values()];
+}
+
+// ── Noticias / Foro del torneo (mock — solo UI por ahora) ──────
+//
+// Nota: esta sección es puramente visual. La lógica real (fetch por
+// [blog-id], creación de posts desde el panel de organizador, etc.)
+// se conecta más adelante. Por ahora `getTournamentNews` devuelve el
+// mismo set ilustrativo para cualquier torneo.
+
+export type TournamentNewsCategory = 'Comunicado' | 'Noticia' | 'Anuncio';
+
+export interface TournamentNewsPost {
+  id: string;
+  category: TournamentNewsCategory;
+  title: string;
+  excerpt: string;
+  author: string;
+  publishedAt: string; // ISO
+  pinned?: boolean;
+}
+
+const MOCK_TOURNAMENT_NEWS: TournamentNewsPost[] = [
+  {
+    id: 'n1',
+    category: 'Comunicado',
+    title: 'Cambio de horario para los partidos de la próxima fecha',
+    excerpt: 'Por disponibilidad de los escenarios deportivos, algunos partidos de la próxima jornada se reprograman. Revisa el fixture actualizado.',
+    author: 'Organización',
+    publishedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    pinned: true,
+  },
+  {
+    id: 'n2',
+    category: 'Noticia',
+    title: 'Resumen de la fecha: goles, figuras y el equipo del torneo',
+    excerpt: 'Repasamos lo más destacado de la jornada anterior con los mejores momentos y las cifras que dejó cada partido.',
+    author: 'Redacción Chapi',
+    publishedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'n3',
+    category: 'Anuncio',
+    title: 'Nuevo patrocinador oficial del torneo',
+    excerpt: 'Nos complace anunciar una nueva alianza que fortalece la producción de las transmisiones en vivo de todos los partidos.',
+    author: 'Organización',
+    publishedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'n4',
+    category: 'Comunicado',
+    title: 'Reglamento de disciplina: acumulación de tarjetas',
+    excerpt: 'Se recuerda a los equipos el reglamento vigente sobre sanciones por acumulación de tarjetas amarillas de cara a la fase final.',
+    author: 'Organización',
+    publishedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+/** Noticias/comunicados del torneo — mock, mismo set para cualquier `tournamentId`. */
+export function getTournamentNews(_tournamentId: string): TournamentNewsPost[] {
+  return MOCK_TOURNAMENT_NEWS;
 }
 
 function buildSquadForTeam(teamId: string, tournament: TournamentDetail): TeamPlayer[] {
@@ -973,7 +1139,7 @@ function buildSquadForTeam(teamId: string, tournament: TournamentDetail): TeamPl
   // Placeholder squad when no playerStats (non-BetPlay tournaments)
   if (players.size === 0) {
     const team =
-      tournament.standings?.find(r => r.team.id === teamId)?.team ??
+      getAllStandingsRows(tournament).find(r => r.team.id === teamId)?.team ??
       tournament.matches.flatMap(m => [m.homeTeam, m.awayTeam]).find(t => t.id === teamId);
     if (team) {
       for (let i = 1; i <= 5; i++) {
@@ -1056,13 +1222,14 @@ export function getMockTeamById(id: string): TeamDetail | null {
   ];
 
   for (const tournament of candidates) {
+    const standingsRows = getAllStandingsRows(tournament);
     const team =
-      tournament.standings?.find(r => r.team.id === teamId)?.team ??
+      standingsRows.find(r => r.team.id === teamId)?.team ??
       tournament.matches.flatMap(m => [m.homeTeam, m.awayTeam]).find(t => t.id === teamId);
 
     if (!team) continue;
 
-    const standingRow = tournament.standings?.find(r => r.team.id === teamId);
+    const standingRow = standingsRows.find(r => r.team.id === teamId);
 
     return {
       id: team.id,

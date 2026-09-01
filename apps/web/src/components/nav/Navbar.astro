@@ -32,8 +32,8 @@ function isActive(href: string): boolean {
 
     <!-- Logo -->
     <a href="/" class="navbar__logo" aria-label="Parches inicio">
-      <span class="navbar__logo-mark">PCH</span>
-      <span class="navbar__logo-text">Par<em>Ches</em></span>
+      <span class="navbar__logo-mark">CHP</span>
+      <span class="navbar__logo-text">CHA<em>PI</em></span>
     </a>
 
     <!-- Nav links (desktop) -->
@@ -58,7 +58,10 @@ function isActive(href: string): boolean {
       {user ? (
         <!-- Usuario autenticado -->
         <div class="navbar__user">
-          <a href={`/users/${user.id}`} class="navbar__user-btn" title={user.name}>
+          <a href="/orgs/new" class="btn-ghost" style="padding: 7px 14px; font-size: 0.8rem;">
+            Crear empresa
+          </a>
+          <a href="/profile" class="navbar__user-btn" title={user.name}>
             <span class="navbar__user-avatar" aria-hidden="true">
               {user.name.charAt(0).toUpperCase()}
             </span>
@@ -108,8 +111,14 @@ function isActive(href: string): boolean {
     <div class="navbar__mobile-auth">
       {user ? (
         <>
-          <a href={`/users/${user.id}`} class="btn-ghost" style="width:100%; justify-content:center;">
+          <a href="/orgs/new" class="btn-ghost" style="width:100%; justify-content:center;">
+            Crear empresa
+          </a>
+          <a href="/profile" class="btn-ghost" style="width:100%; justify-content:center;">
             Mi perfil
+          </a>
+          <a href={`/users/${user.id}`} class="btn-ghost" style="width:100%; justify-content:center;">
+            Perfil público
           </a>
           <a href="/auth/logout" class="btn-ghost" style="width:100%; justify-content:center;">
             Salir
@@ -234,7 +243,7 @@ function isActive(href: string): boolean {
   gap: 8px;
   padding: 5px 10px 5px 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   transition: border-color var(--transition);
 }
 .navbar__user-btn:hover { border-color: var(--border-hover); }
@@ -274,7 +283,7 @@ function isActive(href: string): boolean {
   flex-direction: column;
   gap: 5px;
   padding: 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   transition: background var(--transition);
 }
 .navbar__hamburger:hover { background: var(--bg-raised); }

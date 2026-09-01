@@ -1,7 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma.js';
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   // Registro simplificado — en producción agregar hash de contraseña (bcrypt/argon2)

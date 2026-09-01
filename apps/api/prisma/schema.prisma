@@ -22,8 +22,11 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relaciones según rol
-  refereedMatches Match[]            @relation("referee")
-  playerProfile   PlayerProfile?     // solo si role = PLAYER
+  refereedMatches Match[]        @relation("referee")
+  playerProfile   PlayerProfile? // solo si role = PLAYER
+  // Membresías en empresas. Organizar no cambia User.role — una persona
+  // puede ser VIEWER/PLAYER y a la vez OWNER de una Organization.
+  memberships OrganizationMember[]
 }
 
 enum UserRole {
@@ -35,28 +38,68 @@ enum UserRole {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ORGANIZATION (empresa)
+// Dueña de los torneos. Un User no "es" organizador por User.role:
+// es miembro de una o más empresas (OWNER / ADMIN / EDITOR).
+// ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  logoUrl     String?
+  brandColor  String?
+  description String?
+  city        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     OrganizationMember[]
+  tournaments Tournament[]
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  EDITOR
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           OrgRole      @default(EDITOR)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────
 // PLAYER PROFILE
 // Separado de User para no contaminar la tabla de usuarios con
 // campos que solo aplican a jugadores (posición, dorsal, etc.)
 // ─────────────────────────────────────────────────────────────
 
 model PlayerProfile {
-  id           String @id @default(uuid())
-  userId       String @unique
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Datos deportivos generales
   nationality  String?
   dateOfBirth  DateTime?
-  height       Int?      // cm
-  weight       Int?      // kg
-  dominantHand String?   // "right" | "left" — relevante para tenis
+  height       Int? // cm
+  weight       Int? // kg
+  dominantHand String? // "right" | "left" — relevante para tenis
 
   // Inscripciones en equipos (muchos-a-muchos a través del torneo)
-  enrollments  PlayerEnrollment[]
+  enrollments PlayerEnrollment[]
 
   // Estadísticas acumuladas por partido
-  matchStats   PlayerMatchStat[]
+  matchStats PlayerMatchStat[]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -75,7 +118,7 @@ model PlayerEnrollment {
   tournamentId    String
   tournament      Tournament    @relation(fields: [tournamentId], references: [id])
   jerseyNumber    Int?
-  position        String?       // "delantero", "base", etc.
+  position        String? // "delantero", "base", etc.
   isActive        Boolean       @default(true)
   joinedAt        DateTime      @default(now())
 
@@ -103,12 +146,12 @@ model PlayerEnrollment {
 // ─────────────────────────────────────────────────────────────
 
 model PlayerTournamentStat {
-  id           String           @id @default(uuid())
-  enrollmentId String           @unique
-  enrollment   PlayerEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  matchesPlayed Int             @default(0)
-  stats        Json             // { goals, assists, ... } según deporte
-  updatedAt    DateTime         @updatedAt
+  id            String           @id @default(uuid())
+  enrollmentId  String           @unique
+  enrollment    PlayerEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  matchesPlayed Int              @default(0)
+  stats         Json // { goals, assists, ... } según deporte
+  updatedAt     DateTime         @updatedAt
 }
 
 model PlayerMatchStat {
@@ -119,7 +162,7 @@ model PlayerMatchStat {
   match           Match         @relation(fields: [matchId], references: [id])
   teamId          String
   minutesPlayed   Int?
-  stats           Json          // { goals, assists, ... } según deporte
+  stats           Json // { goals, assists, ... } según deporte
   createdAt       DateTime      @default(now())
 
   @@unique([playerProfileId, matchId])
@@ -131,19 +174,40 @@ model PlayerMatchStat {
 
 model Tournament {
   id          String           @id @default(uuid())
+  // Identificador amigable para URLs (/tournaments/[slug]). Generado a partir
+  // de `name` al crear el torneo. Nullable por compatibilidad con filas
+  // creadas antes de este campo — el código de la app siempre lo genera.
+  slug        String?          @unique
   name        String
   sport       String
   status      TournamentStatus @default(UPCOMING)
   startDate   DateTime
   endDate     DateTime
-  brandColor  String?          // hex del color de marca
+  brandColor  String? // hex del color de marca — paleta por defecto del header
   logoUrl     String?
+  // Imagen de fondo del header (subida por el organizador). Si está presente,
+  // el header la muestra con un overlay oscuro en vez del gradiente de brandColor.
+  backgroundImageUrl String?
   description String?
   createdAt   DateTime         @default(now())
 
+  // Política de playoffs: cuando hasPlayoffs=true y hay >1 grupo,
+  // GET /tournaments/:id/standings arma la tabla compilada de
+  // clasificados (top qualifyingSpots de cada grupo) y los cruces
+  // sugeridos. POST /tournaments/:id/crossmatches/generate los
+  // materializa como Match reales (stage="Cruces").
+  hasPlayoffs     Boolean @default(false)
+  qualifyingSpots Int? // cuántos equipos clasifican por grupo
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   teams       Team[]
+  groups      Group[]
   matches     Match[]
   enrollments PlayerEnrollment[]
+
+  @@index([organizationId])
 }
 
 enum TournamentStatus {
@@ -153,16 +217,39 @@ enum TournamentStatus {
 }
 
 // ─────────────────────────────────────────────────────────────
+// GROUP
+// Fase de grupos para deportes/torneos con muchos equipos
+// (ej. "Grupo A", "Zona Norte"). Opcional: un torneo sin fase
+// de grupos simplemente no tiene Group rows y sus Team.groupId
+// quedan null.
+// ─────────────────────────────────────────────────────────────
+
+model Group {
+  id           String     @id @default(uuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  label        String // "Grupo A"
+  order        Int        @default(0)
+
+  teams Team[]
+
+  @@unique([tournamentId, label])
+}
+
+// ─────────────────────────────────────────────────────────────
 // TEAM
 // ─────────────────────────────────────────────────────────────
 
 model Team {
   id           String     @id @default(uuid())
   name         String
-  shortName    String     // 3 letras para el logo placeholder
+  shortName    String // 3 letras para el logo placeholder
   logoUrl      String?
+  color        String? // hex de marca del equipo
   tournamentId String
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  groupId      String?
+  group        Group?     @relation(fields: [groupId], references: [id])
 
   homeMatches Match[]            @relation("homeTeam")
   awayMatches Match[]            @relation("awayTeam")
@@ -186,9 +273,16 @@ model Match {
   status       MatchStatus @default(SCHEDULED)
   clock        String?
   period       String?
+  // Agrupa el partido dentro del fixture/bracket: "Jornada 18",
+  // "Cruces" (generado desde standings), "Semifinal", "Final"...
+  // Null = fase de grupos / todos-contra-todos sin ronda nombrada.
+  stage        String?
   venue        String?
   streamKey    String?     @unique
   hlsUrl       String?
+  // Estadísticas comparativas del partido (remates, posesión, aces...).
+  // Forma libre por deporte: MatchStatRow[] — { label, home, away, isPercentage?, higherIsBetter? }.
+  stats        Json?
   refereeId    String?
   referee      User?       @relation("referee", fields: [refereeId], references: [id])
   startedAt    DateTime?
@@ -217,9 +311,9 @@ model MatchEvent {
   type        String
   clock       String
   teamId      String?
-  playerId    String?  // PlayerProfile.id
+  playerId    String? // PlayerProfile.id
   description String?
   payload     Json?
-  refereeId   String?  // quién registró el evento
+  refereeId   String? // quién registró el evento
   createdAt   DateTime @default(now())
 }

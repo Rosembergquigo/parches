@@ -11,56 +11,83 @@
  */
 import Base from '../../layouts/Base.astro';
 import ProfileHeader from '../../components/user/ProfileHeader.astro';
-import { getMockUserById } from '../../data/mock';
+import PlayerProfileHeader from '../../components/user/PlayerProfileHeader.astro';
+import PlayerCareerSummary from '../../components/user/PlayerCareerSummary.astro';
+import { getPublicProfile } from '../../lib/api';
 
 const { id } = Astro.params;
-const user = getMockUserById(id!);
+const profile = await getPublicProfile(id!, Astro.request);
 
-if (!user) return Astro.redirect('/404');
+if (!profile) return Astro.redirect('/404');
 
-const isReferee = user.role === 'REFEREE';
+const isReferee = profile.role === 'REFEREE';
+const player = profile.role === 'PLAYER' ? profile.player : null;
+const user = profile.role === 'PLAYER' ? null : profile.user;
+const displayName = player?.name ?? user?.name ?? '';
 ---
 
 <Base
-  title={`${user.name} | Parches`}
-  description={`Perfil de ${user.name} en Parches`}
+  title={`${displayName} | Parches`}
+  description={`Perfil de ${displayName} en Parches`}
 >
-  <ProfileHeader user={user} isOwn={false} />
+  {player && (
+    <>
+      <PlayerProfileHeader player={player} isOwn={false} />
+      <main class="profile-page">
+        <div class="profile-page__inner">
+          <PlayerCareerSummary player={player} />
+        </div>
+      </main>
+    </>
+  )}
 
-  <main class="pub-profile">
-    <div class="pub-profile__inner">
+  {user && (
+    <>
+      <ProfileHeader user={user} isOwn={false} />
 
-      {isReferee && (
-        <section class="pub-section" aria-label="Información del árbitro">
-          <h2 class="pub-section__title">Árbitro verificado</h2>
-          <div class="referee-card">
-            <div class="referee-card__icon">🏅</div>
-            <div class="referee-card__info">
-              <p class="referee-card__text">
-                {user.name} ha arbitrado <strong>{user.matchesRefereed}</strong> partidos
-                en la plataforma con <strong>{user.eventsLogged}</strong> eventos registrados.
-              </p>
-              {user.bio && <p class="referee-card__bio">{user.bio}</p>}
-            </div>
-          </div>
-        </section>
-      )}
+      <main class="pub-profile">
+        <div class="pub-profile__inner">
 
-      {!isReferee && (
-        <section class="pub-section" aria-label="Actividad pública">
-          <div class="viewer-card">
-            <p class="viewer-card__text">
-              Este perfil es privado. Solo el usuario puede ver su historial completo.
-            </p>
-          </div>
-        </section>
-      )}
+          {isReferee && (
+            <section class="pub-section" aria-label="Información del árbitro">
+              <h2 class="pub-section__title">Árbitro verificado</h2>
+              <div class="referee-card">
+                <div class="referee-card__icon">🏅</div>
+                <div class="referee-card__info">
+                  <p class="referee-card__text">
+                    {user.name} ha arbitrado <strong>{user.matchesRefereed}</strong> partidos
+                    en la plataforma con <strong>{user.eventsLogged}</strong> eventos registrados.
+                  </p>
+                  {user.bio && <p class="referee-card__bio">{user.bio}</p>}
+                </div>
+              </div>
+            </section>
+          )}
 
-    </div>
-  </main>
+          {!isReferee && (
+            <section class="pub-section" aria-label="Actividad pública">
+              <div class="viewer-card">
+                <p class="viewer-card__text">
+                  Este perfil es privado. Solo el usuario puede ver su historial completo.
+                </p>
+              </div>
+            </section>
+          )}
+
+        </div>
+      </main>
+    </>
+  )}
 </Base>
 
 <style>
+.profile-page { flex: 1; padding-bottom: 60px; }
+.profile-page__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 28px;
+}
+
 .pub-profile {
   flex: 1;
   padding-bottom: 60px;

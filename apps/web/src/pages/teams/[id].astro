@@ -2,19 +2,20 @@
 /**
  * pages/teams/[id].astro — página de equipo.
  *
- * SSR. 404 si el id no existe en mock.
- * Para API real: import { getTeam } from '../../lib/api';
- *   const team = await getTeam(id!, Astro.request);
+ * SSR. 404 si el equipo no existe (GET /api/teams/:id devuelve 404).
+ * La plantilla (squad) todavía no tiene datos reales — requiere
+ * PlayerEnrollment, que no está cargado en el seed aún — así que esa
+ * sección simplemente no se renderiza (squad.length === 0).
  */
 import Base from '../../layouts/Base.astro';
 import TeamHero from '../../components/team/TeamHero.astro';
 import TeamSquad from '../../components/team/TeamSquad.astro';
 import TeamMatchHistory from '../../components/team/TeamMatchHistory.astro';
 import TeamStatsBar from '../../components/team/TeamStatsBar.astro';
-import { getMockTeamById } from '../../data/mock';
+import { getTeamDetail } from '../../lib/api';
 
 const { id } = Astro.params;
-const team = getMockTeamById(id!);
+const team = await getTeamDetail(id!, Astro.request);
 
 if (!team) return Astro.redirect('/404');
 

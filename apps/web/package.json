@@ -10,19 +10,20 @@
     "type-check": "astro check"
   },
   "dependencies": {
-    "@parches/types": "workspace:*",
-    "@parches/config": "workspace:*",
-    "@parches/utils": "workspace:*",
-    "astro": "^4.8.0",
+    "@astrojs/node": "^8.3.0",
     "@astrojs/react": "^3.3.0",
     "@astrojs/tailwind": "^5.1.0",
-    "@astrojs/node": "^8.3.0",
+    "@parches/config": "workspace:*",
+    "@parches/types": "workspace:*",
+    "@parches/utils": "workspace:*",
+    "astro": "^4.8.0",
+    "jose": "^5.3.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "tailwindcss": "^3.4.3",
-    "jose": "^5.3.0"
+    "tailwindcss": "^3.4.3"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
     "typescript": "^5.4.5"

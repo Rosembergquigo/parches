@@ -6,10 +6,11 @@
  *   VIEWER    → schedule + historial + torneos seguidos
  *   PLAYER    → header deportivo + carrera + inscripciones por torneo
  *   REFEREE   → partidos asignados + historial arbitrado
- *   ORGANIZER → (futuro)
+ *   ORGANIZER → (no es User.role: ver bloque "Mis empresas")
  *   ADMIN     → (futuro)
  *
  * Auth guard: requireAuth redirige a /login si no hay JWT.
+ * Las empresas se muestran para cualquier rol: organizar es membresía.
  */
 import Base           from '../layouts/Base.astro';
 import ProfileHeader  from '../components/user/ProfileHeader.astro';
@@ -17,32 +18,37 @@ import UserSchedule   from '../components/user/UserSchedule.astro';
 import UserHistory    from '../components/user/UserHistory.astro';
 import PlayerProfileHeader  from '../components/user/PlayerProfileHeader.astro';
 import PlayerCareerSummary  from '../components/user/PlayerCareerSummary.astro';
+import OrganizationsPanel   from '../components/user/OrganizationsPanel.astro';
 import { requireAuth } from '../lib/auth';
+import { getUserProfile, getPlayerProfile, getRefereeMatches, getMyOrganizations } from '../lib/api';
 import {
   MOCK_USER_VIEWER,
-  MOCK_USER_REFEREE,
   MOCK_USER_SCHEDULE,
   MOCK_USER_HISTORY,
-  MOCK_USER_PLAYER,
 } from '../data/mock';
 
 // ── Auth guard ─────────────────────────────────────────────
-const _auth = await requireAuth(Astro);
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
 
-// ── Data — swap for real API calls when ready ──────────────
-// const authUser = await api.get('/auth/me', Astro.request);
-// const role     = authUser.role;
+const isPlayer  = auth.role === 'PLAYER';
+const isReferee = auth.role === 'REFEREE';
+const isViewer  = auth.role === 'VIEWER';
 
-// Demo: cambiar a MOCK_USER_REFEREE o MOCK_USER_PLAYER para probar cada vista
-const DEMO_ROLE = 'VIEWER'; // 'VIEWER' | 'REFEREE' | 'PLAYER'
+// VIEWER: "torneos seguidos" / "historial visto" no tienen modelo propio
+// en la API todavía (no hay Follow ni WatchHistory) — se deja mockeado
+// a propósito hasta que se defina ese alcance.
+const viewerUser = isViewer ? { ...MOCK_USER_VIEWER, id: auth.id, name: auth.name, email: auth.email } : null;
 
-const isPlayer  = DEMO_ROLE === 'PLAYER';
-const isReferee = DEMO_ROLE === 'REFEREE';
-const isViewer  = DEMO_ROLE === 'VIEWER';
+// REFEREE y PLAYER sí tienen datos reales de punta a punta.
+const refereeUser     = isReferee ? await getUserProfile(auth.id, Astro.request) : null;
+const refereeMatches  = isReferee ? await getRefereeMatches(auth.id, Astro.request) : null;
+const playerUser      = isPlayer  ? await getPlayerProfile(auth.id, Astro.request) : null;
 
-const viewerUser  = MOCK_USER_VIEWER;
-const refereeUser = MOCK_USER_REFEREE;
-const playerUser  = MOCK_USER_PLAYER;
+const organizations = await getMyOrganizations(Astro.request);
+const genericUser = !isPlayer && !isReferee && !isViewer
+  ? await getUserProfile(auth.id, Astro.request)
+  : null;
 ---
 
 <Base
@@ -52,19 +58,20 @@ const playerUser  = MOCK_USER_PLAYER;
 >
 
   {/* ── PLAYER PROFILE ───────────────────────────────────── */}
-  {isPlayer && (
+  {isPlayer && playerUser && (
     <>
       <PlayerProfileHeader player={playerUser} isOwn={true} />
       <main class="profile-page">
         <div class="profile-page__inner">
           <PlayerCareerSummary player={playerUser} />
+          <OrganizationsPanel organizations={organizations} />
         </div>
       </main>
     </>
   )}
 
   {/* ── VIEWER PROFILE ───────────────────────────────────── */}
-  {isViewer && (
+  {isViewer && viewerUser && (
     <>
       <ProfileHeader user={viewerUser} isOwn={true} />
       <main class="profile-page">
@@ -97,19 +104,33 @@ const playerUser  = MOCK_USER_PLAYER;
               </div>
             </aside>
           </div>
+          <OrganizationsPanel organizations={organizations} />
         </div>
       </main>
     </>
   )}
 
   {/* ── REFEREE PROFILE ──────────────────────────────────── */}
-  {isReferee && (
+  {isReferee && refereeUser && refereeMatches && (
     <>
       <ProfileHeader user={refereeUser} isOwn={true} />
       <main class="profile-page">
         <div class="profile-page__inner">
-          <UserSchedule matches={MOCK_USER_SCHEDULE} userRole="REFEREE" />
-          <UserHistory  matches={MOCK_USER_HISTORY}  userRole="REFEREE" />
+          <UserSchedule matches={refereeMatches.schedule} userRole="REFEREE" />
+          <UserHistory  matches={refereeMatches.history}  userRole="REFEREE" />
+          <OrganizationsPanel organizations={organizations} />
+        </div>
+      </main>
+    </>
+  )}
+
+  {/* ── Otros roles (ADMIN, etc.) ───────────────────────────── */}
+  {genericUser && (
+    <>
+      <ProfileHeader user={genericUser} isOwn={true} />
+      <main class="profile-page">
+        <div class="profile-page__inner">
+          <OrganizationsPanel organizations={organizations} />
         </div>
       </main>
     </>

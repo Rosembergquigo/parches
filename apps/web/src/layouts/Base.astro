@@ -26,7 +26,7 @@ interface Props {
 }
 
 const {
-  title = 'Parches — Marketplace de Torneos',
+  title = 'Chapi — Marketplace de Torneos',
   description = 'Sigue torneos y partidos en vivo de fútbol, básquet, tenis y más.',
   ogImage = '/og-default.jpg',
   noIndex = false,
@@ -64,7 +64,7 @@ const user = await getOptionalUser(Astro.request).catch(() => null);
   <meta name="twitter:image"       content={ogImage} />
 
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/svg+xml" href="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/0fbcaa30-f449-45d2-9978-5bcefc5b88ae/compose?format=webp&label=logo_round_100&width=800" />
 
   <!-- Preconnect fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -81,11 +81,11 @@ const user = await getOptionalUser(Astro.request).catch(() => null);
       <div class="site-footer__brand">
         <span class="navbar__logo-mark" style="display:inline-flex;width:24px;height:24px;font-size:0.85rem;">PCH</span>
         <span style="font-family:var(--font-display);font-size:0.9rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">
-          Par<em style="font-style:normal;color:var(--accent);">Ches</em>
+          Cha<em style="font-style:normal;color:var(--accent);">Pi</em>
         </span>
       </div>
       <p class="site-footer__copy">
-        &copy; {new Date().getFullYear()} Parches. Todos los derechos reservados.
+        &copy; {new Date().getFullYear()} Chapi. Todos los derechos reservados.
       </p>
       <nav class="site-footer__links" aria-label="Links del pie">
         <a href="/about">Nosotros</a>

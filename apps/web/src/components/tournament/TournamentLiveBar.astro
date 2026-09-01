@@ -1,0 +1,109 @@
+---
+/**
+ * TournamentLiveBar.astro — sección superior destacada del torneo.
+ *
+ * Reglas:
+ *   - Si hay partidos EN VIVO → tira horizontal con una MatchCard por cada uno.
+ *   - Si no hay ninguno en vivo pero hay un próximo partido programado →
+ *     banner destacado de "Próximo partido" con ese único encuentro.
+ *   - Si no hay ni lo uno ni lo otro → no renderiza nada.
+ *
+ * Reutiliza MatchCard (mismo componente de las cards de partido en toda
+ * la app) para no duplicar el diseño del hero de equipos/marcador.
+ */
+import MatchCard from '../match/MatchCard.astro';
+import type { MatchSnippet, Sport } from '../../data/mock';
+
+interface Props {
+  liveMatches: MatchSnippet[];
+  nextMatch?: MatchSnippet;
+  sport: Sport;
+}
+
+const { liveMatches, nextMatch, sport } = Astro.props;
+
+const hasLive = liveMatches.length > 0;
+if (!hasLive && !nextMatch) return;
+---
+
+{hasLive ? (
+  <section class="tlb" aria-label="Partidos en vivo">
+    <div class="tlb__header">
+      <span class="tlb__title">
+        <span class="tlb__dot" aria-hidden="true"></span>
+        En vivo ahora
+      </span>
+    </div>
+    <div class="tlb__strip" role="list" aria-label="Partidos en vivo del torneo">
+      {liveMatches.map(m => (
+        <div role="listitem" class="tlb__item">
+          <MatchCard match={m} sport={sport} />
+        </div>
+      ))}
+    </div>
+  </section>
+) : nextMatch && (
+  <section class="tlb tlb--next" aria-label="Próximo partido">
+    <div class="tlb__header">
+      <span class="tlb__title tlb__title--next">Próximo partido</span>
+    </div>
+    <div class="tlb__strip tlb__strip--single">
+      <div class="tlb__item">
+        <MatchCard match={nextMatch} sport={sport} />
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+.tlb {
+  padding: 20px 24px 4px;
+}
+.tlb__header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.tlb__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.tlb__title--next { color: var(--text-secondary); }
+.tlb__dot {
+  width: 7px; height: 7px;
+  background: var(--live);
+  border-radius: 50%;
+  animation: tlbPulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes tlbPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.4; transform: scale(0.65); }
+}
+
+.tlb__strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tlb__strip::-webkit-scrollbar { height: 2px; }
+.tlb__strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.tlb__strip--single {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.tlb__item { flex-shrink: 0; }
+</style>

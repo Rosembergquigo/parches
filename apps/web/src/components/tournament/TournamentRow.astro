@@ -68,7 +68,7 @@ const metaParts = [
   <div class="t-row__strip" role="list" aria-label={`Partidos de ${name}`}>
     {matches.map(match => (
       <div role="listitem">
-        <MatchCard match={match} />
+        <MatchCard match={match} sport={sport} />
       </div>
     ))}
   </div>

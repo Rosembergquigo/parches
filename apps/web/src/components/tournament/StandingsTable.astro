@@ -1,115 +1,204 @@
 ---
 /**
- * StandingsTable.astro — tabla de posiciones.
+ * StandingsTable.astro — tabla(s) de posiciones.
  *
- * Usada por torneos de fútbol y baloncesto.
- * Las primeras N posiciones (clasificación) se resaltan con
- * un acento left-border en cyan.
- * Solo se renderiza si hay datos de standings.
+ * Casos:
+ *  - Un solo grupo (prop `standings` plana, o `groups` con un elemento):
+ *    tabla simple, sin tabs. Comportamiento clásico.
+ *  - Varios grupos (prop `groups`, deportes/torneos con muchos equipos que
+ *    se dividen en zonas): un tab por grupo + un tab "Clasificados" con:
+ *      · la tabla compilada de los clasificados de todos los grupos
+ *        (top `qualifyingSpots` de cada uno, re-ordenados entre sí)
+ *      · los cruces sugeridos: 1° vs último, 2° vs penúltimo... hasta
+ *        los equipos del centro de la tabla (con bye si el total es impar)
  */
-import type { StandingsRow } from '../../data/mock';
+import type { StandingsRow, StandingsGroup, MatchGroup, MatchSnippet } from '../../data/mock';
+import StandingsTableBody from './StandingsTableBody.astro';
+import PlayoffBracket from './PlayoffBracket.astro';
 
 interface Props {
-  standings: StandingsRow[];
-  qualifyingSpots?: number;    // cuántos clasifican (default 4)
+  standings?: StandingsRow[];
+  groups?: StandingsGroup[];
+  qualifyingSpots?: number;    // cuántos clasifican por grupo (default 4)
   sport?: string;
   brandColor?: string;         // color de marca del torneo para el acento de clasificación
 }
 
-const { standings, qualifyingSpots = 4, sport = 'football', brandColor } = Astro.props;
+const {
+  standings = [],
+  groups = [],
+  qualifyingSpots = 4,
+  sport = 'football',
+  brandColor,
+} = Astro.props;
 
-// Color del acento de clasificación: brandColor si existe, sino cyan
+const groupList: StandingsGroup[] =
+  groups.length > 0 ? groups
+  : standings.length > 0 ? [{ label: 'Tabla de posiciones', standings }]
+  : [];
+
+const hasGroups = groupList.length > 1;
 const qualifyColor = brandColor ?? 'var(--accent)';
 
-// Column labels differ slightly by sport
-const isBasket = sport === 'basketball';
+interface QualifierRow extends StandingsRow {
+  groupLabel: string;
+}
+
+// Desempate estándar: puntos → diferencia de gol → goles a favor → nombre.
+function compareRows(a: StandingsRow, b: StandingsRow): number {
+  if (b.points !== a.points) return b.points - a.points;
+  const diffA = a.goalsFor - a.goalsAgainst;
+  const diffB = b.goalsFor - b.goalsAgainst;
+  if (diffB !== diffA) return diffB - diffA;
+  if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+  return a.team.name.localeCompare(b.team.name);
+}
+
+// Tabla compilada: top N de cada grupo, reordenados entre sí y renumerados 1..N.
+const compiledTable: QualifierRow[] = hasGroups
+  ? groupList
+      .flatMap(g =>
+        g.standings
+          .filter(row => row.position <= qualifyingSpots)
+          .map(row => ({ ...row, groupLabel: g.label }))
+      )
+      .sort(compareRows)
+      .map((row, i) => ({ ...row, position: i + 1 }))
+  : [];
+
+// Cruces sugeridos sobre la tabla compilada: 1° vs último, 2° vs penúltimo,
+// ... avanzando hacia el centro. Si el total es impar, el equipo del medio
+// clasifica directo (bye).
+interface Crossmatch {
+  seedA: number;
+  seedB: number | null;
+  teamA: QualifierRow;
+  teamB: QualifierRow | null;
+}
+
+const crossmatches: Crossmatch[] = (() => {
+  const n = compiledTable.length;
+  const pairs: Crossmatch[] = [];
+  for (let i = 0; i < Math.floor(n / 2); i++) {
+    pairs.push({
+      seedA: i + 1,
+      seedB: n - i,
+      teamA: compiledTable[i]!,
+      teamB: compiledTable[n - 1 - i]!,
+    });
+  }
+  if (n % 2 === 1) {
+    const mid = Math.floor(n / 2);
+    pairs.push({ seedA: mid + 1, seedB: null, teamA: compiledTable[mid]!, teamB: null });
+  }
+  return pairs;
+})();
+
+// Los cruces se muestran con el mismo esquema gráfico de PlayoffBracket:
+// se modelan como una ronda única de "partidos" (aún no reales, por eso
+// linkToMatches={false} — no hay /matches/[id] al que navegar todavía).
+const crossmatchRounds: MatchGroup[] = crossmatches.length > 0
+  ? [{
+      label: 'Cruces sugeridos',
+      matches: crossmatches.map((cm): MatchSnippet => ({
+        id: `cross-${cm.seedA}`,
+        homeTeam: cm.teamA.team,
+        awayTeam: cm.teamB ? cm.teamB.team : { id: `bye-${cm.seedA}`, name: 'Clasifica directo', shortName: '—' },
+        homeScore: 0,
+        awayScore: 0,
+        status: 'SCHEDULED',
+        period: cm.teamB ? `${cm.seedA}° vs ${cm.seedB}°` : `${cm.seedA}° · Mejor ubicado`,
+      })),
+    }]
+  : [];
 ---
 
-<div class="standings">
-  <h2 class="standings__title">Tabla de posiciones</h2>
+<div class="standings" id="standingsRoot">
+  <div class="standings__header">
+    <h2 class="standings__title">Tabla de posiciones</h2>
 
-  <div class="standings__table-wrap">
-    <table class="standings__table" aria-label="Tabla de posiciones del torneo">
-      <thead>
-        <tr>
-          <th class="col-pos" scope="col">#</th>
-          <th class="col-team" scope="col">Equipo</th>
-          <th class="col-num" scope="col" title="Partidos jugados">PJ</th>
-          <th class="col-num" scope="col" title="Ganados">G</th>
-          <th class="col-num" scope="col" title="Empatados">{isBasket ? '—' : 'E'}</th>
-          <th class="col-num" scope="col" title="Perdidos">P</th>
-          {!isBasket && (
-            <>
-              <th class="col-num" scope="col" title="Goles a favor">GF</th>
-              <th class="col-num" scope="col" title="Goles en contra">GC</th>
-              <th class="col-num" scope="col" title="Diferencia de gol">DG</th>
-            </>
-          )}
-          <th class="col-pts" scope="col" title="Puntos">PTS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {standings.map((row, i) => {
-          const qualifies  = i < qualifyingSpots;
-          const goalDiff   = row.goalsFor - row.goalsAgainst;
-          const diffStr    = goalDiff > 0 ? `+${goalDiff}` : String(goalDiff);
-          return (
-            <tr
-              class:list={['standings__row', qualifies && 'standings__row--qualify']}
-              style={qualifies ? `border-left-color: ${qualifyColor};` : ''}
-              aria-label={`${row.position}. ${row.team.name}: ${row.points} puntos`}
-            >
-              <td class="col-pos">
-                <span
-                  class:list={['pos-num', qualifies && 'pos-num--qualify']}
-                  style={qualifies ? `color: ${qualifyColor};` : ''}
-                >
-                  {row.position}
-                </span>
-              </td>
-              <td class="col-team">
-                <a href={`/teams/${row.team.id}`} class="team-cell-link" aria-label={`Ver equipo ${row.team.name}`}>
-                  <div class="team-logo" aria-hidden="true">{row.team.shortName}</div>
-                  <span class="team-name">{row.team.name}</span>
-                </a>
-              </td>
-              <td class="col-num">{row.played}</td>
-              <td class="col-num col-win">{row.won}</td>
-              <td class="col-num">{isBasket ? '—' : row.drawn}</td>
-              <td class="col-num col-loss">{row.lost}</td>
-              {!isBasket && (
-                <>
-                  <td class="col-num">{row.goalsFor}</td>
-                  <td class="col-num">{row.goalsAgainst}</td>
-                  <td class:list={['col-num', goalDiff > 0 ? 'col-pos-diff' : goalDiff < 0 ? 'col-neg-diff' : '']}>
-                    {diffStr}
-                  </td>
-                </>
-              )}
-              <td class="col-pts">
-                <strong>{row.points}</strong>
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    {hasGroups && (
+      <div class="standings__tabs" role="tablist" aria-label="Grupos del torneo">
+        {groupList.map((g, i) => (
+          <button
+            type="button"
+            class:list={['standings__tab', i === 0 && 'standings__tab--active']}
+            role="tab"
+            aria-selected={i === 0 ? 'true' : 'false'}
+            data-standings-tab={`g${i}`}
+          >
+            {g.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          class="standings__tab standings__tab--qualify"
+          role="tab"
+          aria-selected="false"
+          data-standings-tab="qualified"
+        >
+          Clasificados
+        </button>
+      </div>
+    )}
   </div>
 
-  <!-- Legend -->
-  <div class="standings__legend">
-    <span
-      class="legend-dot"
-      style={`background: ${qualifyColor};`}
-    ></span>
-    <span class="legend-label">Clasifica a cuadrangulares</span>
-  </div>
+  <!-- Un panel por grupo -->
+  {groupList.map((g, i) => (
+    <div
+      class:list={['standings__panel', i === 0 && 'standings__panel--active']}
+      data-standings-panel={`g${i}`}
+      hidden={i !== 0}
+    >
+      <StandingsTableBody
+        rows={g.standings}
+        qualifyingSpots={qualifyingSpots}
+        sport={sport}
+        brandColor={brandColor}
+        ariaLabel={`Tabla de posiciones — ${g.label}`}
+      />
+      <div class="standings__legend">
+        <span class="legend-dot" style={`background: ${qualifyColor};`}></span>
+        <span class="legend-label">
+          {hasGroups ? 'Clasifica a la fase de clasificados' : 'Clasifica a cuadrangulares'}
+        </span>
+      </div>
+    </div>
+  ))}
+
+  <!-- Panel "Clasificados": tabla compilada + cruces -->
+  {hasGroups && (
+    <div class="standings__panel" data-standings-panel="qualified" hidden>
+      <StandingsTableBody
+        rows={compiledTable}
+        qualifyingSpots={0}
+        sport={sport}
+        brandColor={brandColor}
+        showGroupColumn
+        ariaLabel="Tabla compilada de clasificados"
+      />
+
+      {crossmatchRounds.length > 0 && (
+        <div class="crossmatches">
+          <PlayoffBracket rounds={crossmatchRounds} brandColor={brandColor} linkToMatches={false} />
+        </div>
+      )}
+    </div>
+  )}
 </div>
 
 <style>
 .standings {
   padding: 0 24px;
   margin-bottom: 36px;
+}
+.standings__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 .standings__title {
   font-family: var(--font-display);
@@ -118,146 +207,52 @@ const isBasket = sport === 'basketball';
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin: 0;
 }
 
-/* Scroll wrapper for small screens */
-.standings__table-wrap {
+/* Group tabs */
+.standings__tabs {
+  display: flex;
+  gap: 6px;
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-width: none;
 }
-.standings__table-wrap::-webkit-scrollbar { height: 3px; }
-.standings__table-wrap::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 520px;
-}
-
-thead tr {
-  border-bottom: 1px solid var(--border);
-}
-thead th {
+.standings__tabs::-webkit-scrollbar { display: none; }
+.standings__tab {
+  flex-shrink: 0;
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 10px 12px;
-  text-align: center;
-  white-space: nowrap;
-}
-thead .col-team { text-align: left; }
-
-/* Rows */
-.standings__row {
-  border-bottom: 1px solid var(--border);
-  transition: background var(--transition);
-  position: relative;
-}
-.standings__row:last-child { border-bottom: none; }
-.standings__row:hover { background: var(--bg-raised); }
-
-/* Qualifying accent: left border */
-.standings__row--qualify {
-  border-left: 2px solid var(--accent);
-}
-.standings__row--qualify td:first-child {
-  padding-left: 10px;
-}
-
-/* Cell columns */
-.col-pos {
-  width: 40px;
-  text-align: center;
-  padding: 10px 8px;
-}
-.col-team {
-  padding: 10px 12px;
-  text-align: left;
-}
-.col-num {
-  width: 36px;
-  text-align: center;
-  padding: 10px 6px;
-  font-family: var(--font-display);
-  font-size: 0.82rem;
-  font-weight: 600;
   color: var(--text-secondary);
-}
-.col-pts {
-  width: 44px;
-  text-align: center;
-  padding: 10px 12px;
-}
-.col-pts strong {
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 900;
-  color: var(--text-primary);
-}
-.col-win  { color: var(--success) !important; }
-.col-loss { color: var(--live) !important; }
-.col-pos-diff { color: var(--success) !important; }
-.col-neg-diff { color: var(--live) !important; }
-
-/* Position number */
-.pos-num {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.pos-num--qualify { color: var(--accent); }
-
-/* Team cell */
-.team-cell {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.team-cell-link {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  text-decoration: none;
-  transition: opacity var(--transition);
-}
-.team-cell-link:hover { opacity: 0.75; }
-.team-cell-link:hover .team-name { color: var(--accent); }
-.team-logo {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 0.48rem;
-  font-weight: 800;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  letter-spacing: 0;
+  border-radius: var(--radius-pill);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
 }
-.team-name {
-  font-family: var(--font-display);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+.standings__tab:hover {
   color: var(--text-primary);
-  white-space: nowrap;
+  border-color: var(--border-hover);
 }
+.standings__tab--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.standings__tab--qualify {
+  color: var(--text-primary);
+  border-style: dashed;
+}
+.standings__tab--qualify.standings__tab--active {
+  color: var(--accent);
+  border-style: solid;
+}
+
+.standings__panel { display: none; }
+.standings__panel--active { display: block; }
 
 /* Legend */
 .standings__legend {
@@ -271,7 +266,6 @@ thead .col-team { text-align: left; }
   height: 3px;
   border-radius: 2px;
 }
-.legend-dot--qualify { background: var(--accent); }
 .legend-label {
   font-family: var(--font-display);
   font-size: 0.6rem;
@@ -280,4 +274,36 @@ thead .col-team { text-align: left; }
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
+/* Cruces sugeridos — reutiliza el look de PlayoffBracket */
+.crossmatches {
+  margin-top: 20px;
+}
 </style>
+
+<script>
+  (function () {
+    const root = document.getElementById('standingsRoot');
+    if (!root) return;
+
+    const tabs = root.querySelectorAll<HTMLButtonElement>('[data-standings-tab]');
+    const panels = root.querySelectorAll<HTMLElement>('[data-standings-panel]');
+    if (!tabs.length) return;
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const key = tab.getAttribute('data-standings-tab');
+        tabs.forEach(t => {
+          const active = t.getAttribute('data-standings-tab') === key;
+          t.classList.toggle('standings__tab--active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panels.forEach(panel => {
+          const active = panel.getAttribute('data-standings-panel') === key;
+          panel.classList.toggle('standings__panel--active', active);
+          panel.hidden = !active;
+        });
+      });
+    });
+  })();
+</script>

@@ -2,13 +2,15 @@
 /**
  * TournamentHero.astro — header visual de la página de torneo.
  *
- * Personalización de marca:
- *   - brandColor → tinta el gradiente del hero y el acento de la tabla
- *   - logoUrl    → muestra la imagen del torneo; si no hay, genera
- *                  iniciales con brandColor como fondo
- *
- * Ambos campos son opcionales — progressive enhancement.
- * Sin ellos el componente usa el gradiente genérico por deporte.
+ * Personalización de marca (todo opcional — progressive enhancement):
+ *   - brandColor         → tinta el gradiente del hero y el acento de la tabla.
+ *                           Sin él, cae al gradiente genérico por deporte.
+ *   - backgroundImageUrl → si el organizador subió una imagen de fondo, se
+ *                           muestra por encima del gradiente con un overlay
+ *                           oscuro (+ un tinte sutil de brandColor) para
+ *                           mantener la legibilidad del texto.
+ *   - logoUrl            → muestra la imagen del torneo; si no hay, genera
+ *                           un avatar circular con las iniciales del nombre.
  */
 import SportIcon from '../ui/SportIcon.astro';
 import type { TournamentDetail } from '../../data/mock';
@@ -18,7 +20,7 @@ interface Props {
 }
 
 const { tournament } = Astro.props;
-const { name, sport, stage, status, teamCount, description, brandColor, logoUrl } = tournament;
+const { name, sport, stage, status, teamCount, description, brandColor, logoUrl, backgroundImageUrl } = tournament;
 
 const liveMatches = tournament.matches.filter(m => m.status === 'LIVE').length;
 
@@ -37,6 +39,12 @@ const sportGradient: Record<string, string> = {
 const bgGradient = brandColor
   ? `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}11 45%, #0a0c0f 100%)`
   : (sportGradient[sport] ?? sportGradient.football);
+
+// Cuando hay imagen de fondo, se aplica un scrim oscuro (legibilidad) con
+// un tinte sutil de brandColor encima — en vez del gradiente completo.
+const photoOverlay = brandColor
+  ? `linear-gradient(135deg, ${brandColor}45 0%, rgba(10,12,15,0.55) 40%, rgba(10,12,15,0.85) 100%)`
+  : `linear-gradient(135deg, rgba(10,12,15,0.35) 0%, rgba(10,12,15,0.55) 45%, rgba(10,12,15,0.88) 100%)`;
 
 // ── Logo / initials ─────────────────────────────────────────
 // Toma las primeras letras de cada palabra del nombre (máx 2)
@@ -61,9 +69,26 @@ const sportLabel: Record<string, string> = {
 };
 ---
 
-<div class="t-hero" style={`background: ${bgGradient ?? sportGradient.football}`}>
-  <!-- Grid texture -->
-  <div class="t-hero__grid" aria-hidden="true"></div>
+<div
+  class:list={['t-hero', backgroundImageUrl && 't-hero--photo']}
+  style={`background: ${bgGradient ?? sportGradient.football}`}
+>
+  <!-- Background image (si el organizador la subió) -->
+  {backgroundImageUrl && (
+    <img
+      src={backgroundImageUrl}
+      alt=""
+      aria-hidden="true"
+      class="t-hero__bg-img"
+      loading="eager"
+    />
+  )}
+  <!-- Overlay oscuro + tinte de marca para mantener legibilidad sobre la foto -->
+  {backgroundImageUrl && (
+    <div class="t-hero__photo-overlay" style={`background: ${photoOverlay}`} aria-hidden="true"></div>
+  )}
+  <!-- Grid texture (se oculta sobre foto — compite visualmente) -->
+  {!backgroundImageUrl && <div class="t-hero__grid" aria-hidden="true"></div>}
   <!-- Bottom fade -->
   <div class="t-hero__fade" aria-hidden="true"></div>
 
@@ -174,6 +199,21 @@ const sportLabel: Record<string, string> = {
   background: linear-gradient(to top, rgba(10,12,15,0.95) 0%, transparent 60%);
   pointer-events: none;
 }
+
+/* Background image + overlay (cuando el organizador subió una foto) */
+.t-hero__bg-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.t-hero__photo-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.t-hero--photo {
+  min-height: 240px;
+}
 .t-hero__content {
   position: relative;
   z-index: 2;
@@ -231,17 +271,17 @@ const sportLabel: Record<string, string> = {
 .t-hero__logo-img {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
-  object-fit: contain;
+  border-radius: 50%;
+  object-fit: cover;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.12);
 }
 
-/* Brand logo — iniciales generadas */
+/* Brand logo — avatar circular con iniciales generadas */
 .t-hero__logo-initials {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
+  border-radius: 50%;
   border: 1px solid;
   display: flex;
   align-items: center;

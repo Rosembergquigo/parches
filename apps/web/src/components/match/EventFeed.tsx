@@ -12,17 +12,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-
-interface MatchEvent {
-  id: string;
-  type: 'goal' | 'yellow_card' | 'red_card' | 'foul' | 'substitution' |
-        'period_start' | 'period_end' | 'timeout' | 'score_update' | 'custom';
-  clock: string;
-  teamId?: string;
-  playerName?: string;
-  description?: string;
-  timestamp: string;
-}
+import { EVENT_CONFIG, type MatchEventItem } from '../../lib/matchEvents';
 
 interface Team {
   id: string;
@@ -34,31 +24,17 @@ interface Props {
   matchId: string;
   homeTeam: Team;
   awayTeam: Team;
-  initialEvents: MatchEvent[];
+  initialEvents: MatchEventItem[];
   status: 'LIVE' | 'SCHEDULED' | 'FINISHED';
   wsUrl: string;
 }
-
-// Event config: icon character (CSS) + label + accent color
-const EVENT_CONFIG: Record<string, { symbol: string; label: string; color: string }> = {
-  goal:         { symbol: '⚽', label: 'Gol',            color: '#00e5ff' },
-  yellow_card:  { symbol: '🟨', label: 'Tarjeta amarilla', color: '#f5a623' },
-  red_card:     { symbol: '🟥', label: 'Tarjeta roja',   color: '#ff3b3b' },
-  foul:         { symbol: '⚠',  label: 'Falta',          color: '#8a9099' },
-  substitution: { symbol: '🔄', label: 'Cambio',         color: '#8a9099' },
-  period_start: { symbol: '▶',  label: 'Inicio',         color: '#454a52' },
-  period_end:   { symbol: '⏸',  label: 'Fin de tiempo',  color: '#454a52' },
-  timeout:      { symbol: '⏱',  label: 'Tiempo muerto',  color: '#8a9099' },
-  score_update: { symbol: '📊', label: 'Actualización',  color: '#00e5ff' },
-  custom:       { symbol: '📌', label: 'Evento',         color: '#8a9099' },
-};
 
 export default function EventFeed({
   matchId, homeTeam, awayTeam,
   initialEvents, status, wsUrl,
 }: Props) {
   // Newest first
-  const [events, setEvents] = useState<MatchEvent[]>(
+  const [events, setEvents] = useState<MatchEventItem[]>(
     [...initialEvents].reverse()
   );
   const wsRef = useRef<WebSocket | null>(null);
@@ -74,7 +50,7 @@ export default function EventFeed({
         const msg = JSON.parse(e.data as string);
         if (msg.matchId !== matchId) return;
         if (msg.type === 'event' && msg.data) {
-          setEvents(prev => [msg.data as MatchEvent, ...prev]);
+          setEvents(prev => [msg.data as MatchEventItem, ...prev]);
         }
       } catch { /* ignore */ }
     };

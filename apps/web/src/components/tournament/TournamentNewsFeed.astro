@@ -1,0 +1,195 @@
+---
+/**
+ * TournamentNewsFeed.astro — Noticias / Foro del torneo.
+ *
+ * Vista de cards estilo foro/anuncios oficiales. Por ahora es solo UI:
+ * los datos vienen de `getTournamentNews` (mock) y las cards linkean a
+ * /tournaments/[slug]/news/[id] — esa ruta y su lógica (fetch real,
+ * creación de posts desde el panel de organizador) se conectan más
+ * adelante, esto solo deja la estructura de navegación lista.
+ */
+import type { TournamentNewsPost } from '../../data/mock';
+
+interface Props {
+  posts: TournamentNewsPost[];
+  tournamentSlug: string;
+  brandColor?: string;
+}
+
+const { posts, tournamentSlug, brandColor } = Astro.props;
+const accent = brandColor ?? 'var(--accent)';
+
+const categoryClass: Record<string, string> = {
+  Comunicado: 'news-card__badge--comunicado',
+  Noticia: 'news-card__badge--noticia',
+  Anuncio: 'news-card__badge--anuncio',
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const sorted = [...posts].sort((a, b) => {
+  if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+  return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+});
+---
+
+<div class="news-feed-wrap">
+  <h2 class="news-feed__title">Noticias &amp; Foro</h2>
+
+  {sorted.length === 0 ? (
+    <p class="news-feed__empty">No hay noticias ni comunicados todavía.</p>
+  ) : (
+    <div class="news-feed" role="list" aria-label="Noticias y comunicados del torneo">
+      {sorted.map(post => (
+        <a
+          href={`/tournaments/${tournamentSlug}/news/${post.id}`}
+          class="news-card"
+          role="listitem"
+        >
+          <div class="news-card__top">
+            <span class:list={['news-card__badge', categoryClass[post.category]]}>
+              {post.category}
+            </span>
+            {post.pinned && (
+              <span class="news-card__pinned" style={`color: ${accent}`} aria-label="Fijado">
+                📌 Fijado
+              </span>
+            )}
+          </div>
+          <h3 class="news-card__title">{post.title}</h3>
+          <p class="news-card__excerpt">{post.excerpt}</p>
+          <div class="news-card__bottom">
+            <span class="news-card__author">{post.author}</span>
+            <span class="news-card__dot" aria-hidden="true">·</span>
+            <span class="news-card__date">{formatDate(post.publishedAt)}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  )}
+</div>
+
+<style>
+.news-feed-wrap {
+  padding: 0 24px;
+  margin-bottom: 8px;
+}
+.news-feed__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+.news-feed__empty {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.news-feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.news-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.news-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+
+.news-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.news-card__badge {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.news-card__badge--comunicado {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(0,229,255,0.3);
+}
+.news-card__badge--noticia {
+  color: #f0f2f5;
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.14);
+}
+.news-card__badge--anuncio {
+  color: #f5a623;
+  background: rgba(245,166,35,0.12);
+  border-color: rgba(245,166,35,0.3);
+}
+.news-card__pinned {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.news-card__title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  line-height: 1.25;
+  margin: 0;
+}
+.news-card__excerpt {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-card__bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.news-card__dot { opacity: 0.6; }
+</style>

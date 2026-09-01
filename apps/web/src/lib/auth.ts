@@ -9,7 +9,7 @@
  *   ---
  *   import { requireAuth } from '../lib/auth';
  *   const user = await requireAuth(Astro);
- *   // Si no está autenticado, requireAuth ya hizo redirect a /login
+ *   if (user instanceof Response) return user;
  *   ---
  */
 
@@ -23,7 +23,7 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  role: 'VIEWER' | 'REFEREE' | 'ORGANIZER' | 'ADMIN';
+  role: 'VIEWER' | 'PLAYER' | 'REFEREE' | 'ORGANIZER' | 'ADMIN';
 }
 
 export interface JwtPayload {
@@ -62,12 +62,12 @@ export async function getJwtPayload(request: Request): Promise<JwtPayload | null
  * Si no hay sesión válida → redirect a /login con `next` param.
  * Si la hay → retorna el usuario desde la API.
  */
-export async function requireAuth(astro: AstroGlobal): Promise<AuthUser> {
+export async function requireAuth(astro: AstroGlobal): Promise<AuthUser | Response> {
   const payload = await getJwtPayload(astro.request);
 
   if (!payload) {
     const next = encodeURIComponent(astro.url.pathname);
-    return astro.redirect(`/login?next=${next}`) as never;
+    return astro.redirect(`/login?next=${next}`);
   }
 
   try {
@@ -76,7 +76,7 @@ export async function requireAuth(astro: AstroGlobal): Promise<AuthUser> {
   } catch (err) {
     // Token válido pero el usuario no existe en el api → limpiar cookie
     if (err instanceof ApiError && err.status === 401) {
-      return astro.redirect('/login') as never;
+      return astro.redirect('/login');
     }
     throw err;
   }

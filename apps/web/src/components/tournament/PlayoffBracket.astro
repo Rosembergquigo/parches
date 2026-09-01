@@ -3,16 +3,19 @@
  * PlayoffBracket.astro — esquema gráfico tipo llave (bracket map).
  *
  * Cada MatchGroup es una ronda de izquierda a derecha
- * (Semifinales → Final). Las cajas linkean a /matches/[id].
+ * (Semifinales → Final). Las cajas linkean a /matches/[id], salvo que
+ * `linkToMatches` sea false (ej. cruces sugeridos que aún no son
+ * partidos reales — StandingsTable los reutiliza con este mismo look).
  */
 import type { MatchGroup, MatchSnippet } from '../../data/mock';
 
 interface Props {
   rounds: MatchGroup[];
   brandColor?: string;
+  linkToMatches?: boolean;
 }
 
-const { rounds, brandColor } = Astro.props;
+const { rounds, brandColor, linkToMatches = true } = Astro.props;
 const accent = brandColor ?? 'var(--accent)';
 
 function scoreLabel(m: MatchSnippet): string {
@@ -37,8 +40,8 @@ function statusClass(status: MatchSnippet['status']): string {
               const awayWins = m.status !== 'SCHEDULED' && m.awayScore > m.homeScore;
               return (
                 <a
-                  href={`/matches/${m.id}`}
-                  class:list={['pb-match', statusClass(m.status)]}
+                  href={linkToMatches ? `/matches/${m.id}` : undefined}
+                  class:list={['pb-match', statusClass(m.status), !linkToMatches && 'pb-match--static']}
                   aria-label={`${m.homeTeam.name} vs ${m.awayTeam.name}`}
                 >
                   <div class="pb-match__rail" aria-hidden="true"></div>
@@ -169,6 +172,14 @@ function statusClass(status: MatchSnippet['status']): string {
 }
 .pb-match--finished .pb-match__rail {
   background: var(--border-hover);
+}
+.pb-match--static {
+  cursor: default;
+}
+.pb-match--static:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border);
 }
 
 .pb-match__rail {

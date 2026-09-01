@@ -173,7 +173,7 @@ const defaultRoundIndex = (() => {
   padding: 3px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
 }
 .fixture__mode {
   font-family: var(--font-display);
@@ -184,7 +184,7 @@ const defaultRoundIndex = (() => {
   color: var(--text-secondary);
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   padding: 7px 12px;
   cursor: pointer;
   transition: color var(--transition), background var(--transition);
@@ -231,7 +231,7 @@ const defaultRoundIndex = (() => {
   color: var(--text-secondary);
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   padding: 7px 12px;
   cursor: pointer;
   display: inline-flex;
@@ -312,7 +312,7 @@ const defaultRoundIndex = (() => {
         root.querySelectorAll('.fixture__mode-panel').forEach(panel => {
           const active = panel.id === 'fixture-mode-' + mode;
           panel.classList.toggle('fixture__mode-panel--active', active);
-          panel.hidden = !active;
+          (panel as HTMLElement).hidden = !active;
         });
       });
     });
@@ -331,7 +331,7 @@ const defaultRoundIndex = (() => {
         roundPanels.forEach(panel => {
           const active = panel.getAttribute('data-fixture-panel') === idx;
           panel.classList.toggle('fixture__panel--active', active);
-          panel.hidden = !active;
+          (panel as HTMLElement).hidden = !active;
         });
       });
     });

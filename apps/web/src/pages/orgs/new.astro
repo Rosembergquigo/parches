@@ -1,0 +1,153 @@
+---
+/**
+ * pages/orgs/new.astro — crear una empresa.
+ *
+ * Auth required. POST → API → redirect a /orgs/[slug].
+ */
+import Base from '../../layouts/Base.astro';
+import { requireAuth } from '../../lib/auth';
+import { api } from '../../lib/api';
+
+const user = await requireAuth(Astro);
+if (user instanceof Response) return user;
+
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const form = await Astro.request.formData();
+    const name = String(form.get('name') ?? '').trim();
+    const city = String(form.get('city') ?? '').trim();
+    const brandColor = String(form.get('brandColor') ?? '').trim();
+    const description = String(form.get('description') ?? '').trim();
+    const logoUrl = String(form.get('logoUrl') ?? '').trim();
+
+    const created = await api.post<{ slug: string }>(
+      '/organizations',
+      {
+        name,
+        city: city || undefined,
+        brandColor: brandColor || undefined,
+        description: description || undefined,
+        logoUrl: logoUrl || undefined,
+      },
+      Astro.request
+    );
+
+    return Astro.redirect(`/orgs/${created.slug}`);
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo crear la empresa';
+  }
+}
+---
+
+<Base title="Crear empresa | Chapi" description="Registra tu empresa para publicar torneos." noIndex={true}>
+  <main class="auth-page">
+    <div class="auth-card">
+      <div class="auth-card__header">
+        <span class="accent-line"></span>
+        <h1 class="display-md" style="margin-top: 12px;">Crear empresa</h1>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 6px;">
+          La empresa es la dueña de tus torneos. Tú quedas como dueño.
+        </p>
+      </div>
+
+      {error && (
+        <div class="auth-error" role="alert">{error}</div>
+      )}
+
+      <form method="POST" class="auth-form">
+        <div class="form-field">
+          <label class="label" for="name">Nombre</label>
+          <input type="text" id="name" name="name" required
+            placeholder="Liga Amateur Bogotá" class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="city">Ciudad</label>
+          <input type="text" id="city" name="city"
+            placeholder="Bogotá" class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="brandColor">Color de marca</label>
+          <input type="text" id="brandColor" name="brandColor"
+            placeholder="#00e5ff" pattern="^#?[0-9A-Fa-f]{6}$" class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="logoUrl">URL del logo (opcional)</label>
+          <input type="url" id="logoUrl" name="logoUrl"
+            placeholder="https://…" class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="description">Descripción</label>
+          <textarea id="description" name="description" rows="4"
+            placeholder="Quiénes son, qué torneos organizan…"
+            class="form-input form-input--area"></textarea>
+        </div>
+
+        <button type="submit" class="btn-accent" style="width:100%; justify-content:center; padding: 12px;">
+          Crear empresa
+        </button>
+      </form>
+    </div>
+  </main>
+</Base>
+
+<style>
+.auth-page {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+}
+.auth-card__header { margin-bottom: 28px; }
+.auth-error {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+.form-input--area {
+  border-radius: var(--radius-lg);
+  resize: vertical;
+  min-height: 96px;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text-muted); }
+</style>

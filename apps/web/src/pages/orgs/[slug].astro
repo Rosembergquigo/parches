@@ -1,0 +1,204 @@
+---
+/**
+ * pages/orgs/[slug].astro — ficha pública de una empresa.
+ *
+ * Lista sus torneos (reusa TournamentRow). Si el visitante es miembro,
+ * puede crear un torneo desde el wizard.
+ */
+import Base from '../../layouts/Base.astro';
+import TournamentRow from '../../components/tournament/TournamentRow.astro';
+import { getOrganization } from '../../lib/api';
+
+const { slug } = Astro.params;
+const org = await getOrganization(slug!, Astro.request);
+if (!org) return Astro.redirect('/404');
+
+const initials = org.name
+  .split(' ')
+  .filter(w => w.length > 2)
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('') || org.name.slice(0, 2).toUpperCase();
+
+const markBg = org.brandColor ?? '#1e232b';
+const canManage = !!org.myRole;
+---
+
+<Base
+  title={`${org.name} | Chapi`}
+  description={org.description ?? `${org.name} — torneos en Chapi.`}
+>
+  <header class="org-hero" style={org.brandColor ? `background: linear-gradient(135deg, ${org.brandColor}22 0%, #0a0c0f 70%)` : undefined}>
+    <div class="org-hero__inner">
+      <div
+        class="org-hero__mark"
+        style={`background: ${markBg}`}
+        aria-hidden="true"
+      >
+        {org.logoUrl ? <img src={org.logoUrl} alt="" /> : initials}
+      </div>
+      <div class="org-hero__text">
+        <p class="org-hero__kicker">Empresa</p>
+        <h1 class="org-hero__name">{org.name}</h1>
+        <p class="org-hero__meta">
+          {[org.city, `${org.tournamentCount} torneo${org.tournamentCount === 1 ? '' : 's'}`, `${org.memberCount} miembro${org.memberCount === 1 ? '' : 's'}`]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        {org.description && <p class="org-hero__desc">{org.description}</p>}
+      </div>
+    </div>
+  </header>
+
+  <main class="org-page">
+    <div class="org-page__inner">
+      {canManage && (
+        <div class="org-banner">
+          <p>
+            Eres {org.myRole === 'OWNER' ? 'dueño' : org.myRole === 'ADMIN' ? 'admin' : 'editor'} de esta empresa.
+          </p>
+          <a href={`/orgs/${org.slug}/tournaments/new`} class="btn-accent" style="padding: 8px 16px; font-size: 0.78rem;">
+            Crear torneo
+          </a>
+        </div>
+      )}
+
+      <div class="org-page__title-row">
+        <h2 class="org-page__title">Torneos</h2>
+      </div>
+      {org.tournaments.length === 0 ? (
+        <p class="org-empty">Esta empresa aún no tiene torneos publicados.</p>
+      ) : (
+        org.tournaments.map(t => (
+          <div class="org-tournament">
+            <TournamentRow tournament={t} />
+            {canManage && t.matches.length === 0 && (
+              <p class="org-fixture-cta">
+                Sin calendario.
+                <a href={`/orgs/${org.slug}/tournaments/${t.slug}/fixture`}>Cargar fixture</a>
+              </p>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  </main>
+</Base>
+
+<style>
+.org-hero {
+  padding: 36px 24px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.org-hero__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.org-hero__mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.org-hero__mark img { width: 100%; height: 100%; object-fit: cover; }
+.org-hero__kicker {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+.org-hero__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.org-hero__meta {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+.org-hero__desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+  max-width: 56ch;
+  line-height: 1.5;
+}
+.org-page { flex: 1; padding-bottom: 60px; }
+.org-page__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 0 8px;
+}
+.org-page__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  margin: 0 0 8px;
+}
+.org-page__title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.org-banner {
+  margin: 0 24px 20px;
+  padding: 12px 16px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,229,255,0.25);
+  border-radius: var(--radius-lg);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.org-banner p { margin: 0; }
+.org-empty {
+  padding: 32px 24px;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.org-fixture-cta {
+  margin: -8px 24px 16px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.org-fixture-cta a { color: var(--accent); font-weight: 600; }
+@media (max-width: 600px) {
+  .org-hero__inner { flex-direction: column; align-items: flex-start; }
+}
+</style>

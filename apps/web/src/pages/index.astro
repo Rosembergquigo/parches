@@ -2,9 +2,11 @@
 /**
  * pages/index.astro — Marketplace principal de Parches.
  *
- * Para conectar la API real, reemplaza los imports de mock por:
- *   import { getTournaments } from '../lib/api';
- *   const tournaments = await getTournaments(Astro.request);
+ * Datos reales desde @parches/api (ver lib/api.ts + lib/adapters.ts).
+ * El "viewer count" para ordenar el hero vive en streaming-data (Redis),
+ * no en Postgres, así que por ahora el hero simplemente toma los primeros
+ * partidos LIVE que encuentre — se puede refinar cuando streaming-data
+ * esté conectado.
  */
 import Base from '../layouts/Base.astro';
 import HeroCarousel from '../components/hero/HeroCarousel.astro';
@@ -12,23 +14,31 @@ import LiveStrip from '../components/match/LiveStrip.astro';
 import SportTabs from '../components/tournament/SportTabs.astro';
 import TournamentRow from '../components/tournament/TournamentRow.astro';
 
-import {
-  MOCK_TOURNAMENTS,
-  MOCK_HERO_MATCHES,
-  MOCK_LIVE_MATCHES,
-  type Sport,
-} from '../data/mock';
+import { getTournamentsWithMatches } from '../lib/api';
+import type { Sport } from '../data/mock';
 
-const tournaments = MOCK_TOURNAMENTS;
-const heroMatches = MOCK_HERO_MATCHES;
-const liveMatches = MOCK_LIVE_MATCHES as any[];
+const tournaments = await getTournamentsWithMatches(Astro.request);
+
+const liveMatches = tournaments.flatMap(t =>
+  t.matches
+    .filter(m => m.status === 'LIVE')
+    .map(m => ({ ...m, _tournament: t.name, _sport: t.sport }))
+) as any[];
+
+const heroMatches = tournaments
+  .flatMap(t =>
+    t.matches
+      .filter(m => m.status === 'LIVE')
+      .map(m => ({ ...m, tournamentName: t.name, sport: t.sport, stage: t.stage }))
+  )
+  .slice(0, 3) as any[];
 
 const activeSports: Sport[] = [...new Set(tournaments.map(t => t.sport))];
 
 const liveCount = liveMatches.length;
 const pageTitle = liveCount > 0
-  ? `Parches — ${liveCount} Partido${liveCount > 1 ? 's' : ''} en Vivo`
-  : 'Parches — Marketplace de Torneos';
+  ? `Chapi — ${liveCount} Partido${liveCount > 1 ? 's' : ''} en Vivo`
+  : 'CHapi — Marketplace de Torneos';
 const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis, voleibol y más deportes colombianos.';
 ---
 

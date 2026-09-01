@@ -1,143 +1,186 @@
 ---
 /**
- * pages/tournaments/[slug].astro — página de torneo.
+ * pages/tournaments/[slug].astro — página principal de un torneo.
  *
- * SSR puro. Renderiza con datos del torneo identificado por slug.
- * 404 si el slug no existe.
+ * SSR puro. Renderiza con datos del torneo identificado por slug (o id,
+ * ver lib/api.ts::getTournamentDetail). 404 si no existe.
  *
  * Estructura:
- *   TournamentHero    — header con nombre, deporte, estado
- *   [en vivo]         — live strip si hay partidos activos
- *   StandingsTable    — tabla de posiciones (si hay standings)
- *   TeamsGrid         — grid de equipos → /teams/[id]
- *   MatchFixture      — Todos contra todos + Playoffs (bracket) si policies.playoffs
- *   PlayerStatsTable  — goleadores / stats
- *
- * Para conectar el API real, reemplaza getMockTournamentBySlug por:
- *   import { getTournament } from '../../lib/api';
- *   const tournament = await getTournament(slug, Astro.request);
+ *   TournamentHero        — header con nombre, deporte, estado. Usa la
+ *                            paleta de brandColor por defecto, o la foto
+ *                            de backgroundImageUrl (con overlay) si existe.
+ *   TournamentLiveBar      — partidos en vivo ahora, o el próximo si no
+ *                            hay ninguno en curso.
+ *   TournamentFixtureStrip — primer componente principal: fixture con
+ *                            estética de TournamentRow + dropdown para
+ *                            saltar entre jornadas/rondas de playoffs.
+ *                            Ocupa el ancho completo de la pantalla
+ *                            (fuera del contenedor de 1280px).
+ *   Tabs (click, no scroll-spy):
+ *     Tabla        → StandingsTable (soporta grupos + clasificados)
+ *     Equipos      → TeamsGrid
+ *     Estadísticas → PlayerStatsTable (si hay datos — no forma parte del
+ *                    pedido original, se conserva como tab adicional)
+ *   Noticias/Foro → TournamentNewsFeed. Ya no es una pestaña: es su propia
+ *                    sección, siempre visible debajo de Tabla/Equipos, al
+ *                    75% del ancho de la página en pantallas grandes
+ *                    (>= ~15", 100% en pantallas más chicas).
  */
 import Base from '../../layouts/Base.astro';
 import TournamentHero from '../../components/tournament/TournamentHero.astro';
+import TournamentLiveBar from '../../components/tournament/TournamentLiveBar.astro';
+import TournamentFixtureStrip from '../../components/tournament/TournamentFixtureStrip.astro';
 import StandingsTable from '../../components/tournament/StandingsTable.astro';
-import MatchFixture from '../../components/tournament/MatchFixture.astro';
-import LiveStrip from '../../components/match/LiveStrip.astro';
 import PlayerStatsTable from '../../components/tournament/PlayerStatsTable.astro';
 import TeamsGrid from '../../components/tournament/TeamsGrid.astro';
-import { getMockTournamentBySlug, getTeamsForTournament } from '../../data/mock';
+import TournamentNewsFeed from '../../components/tournament/TournamentNewsFeed.astro';
+import { getTournamentDetail } from '../../lib/api';
+import { getTeamsForTournament, getAllStandingsRows, getTournamentNews } from '../../data/mock';
 
 const { slug } = Astro.params;
 
-const tournament = getMockTournamentBySlug(slug!);
+const tournament = await getTournamentDetail(slug!, Astro.request);
 if (!tournament) return Astro.redirect('/404');
 
-const liveNow = tournament.matches
-  .filter(m => m.status === 'LIVE')
-  .map(m => ({ ...m, _tournament: tournament.name, _sport: tournament.sport })) as any[];
+const liveMatches = tournament.matches.filter(m => m.status === 'LIVE');
+
+const nextMatch = tournament.matches
+  .filter(m => m.status === 'SCHEDULED')
+  .sort((a, b) => {
+    if (!a.scheduledAt) return 1;
+    if (!b.scheduledAt) return -1;
+    return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+  })[0];
 
 const teams = getTeamsForTournament(tournament);
+const hasStandings = !!(tournament.standings?.length || tournament.standingsGroups?.length);
 
 const showPlayoffs =
   tournament.policies?.playoffs === true &&
   (tournament.playoffGroups?.length ?? 0) > 0;
 
-const hasFixture =
-  (tournament.groups?.length ?? 0) > 0 || showPlayoffs;
+const newsPosts = getTournamentNews(tournament.id);
+const hasPlayerStats = !!tournament.playerStats?.length;
 
-const hasTabs = !!(
-  tournament.standings ||
-  teams.length ||
-  hasFixture ||
-  tournament.playerStats?.length
-);
+// Tabs: Tabla | Equipos + Estadísticas como pestaña adicional (si hay datos).
+// Noticias/Foro ya no vive aquí — ver sección aparte más abajo.
+const tabs = [
+  hasStandings   && { id: 'tabla', label: 'Tabla' },
+  teams.length > 0 && { id: 'equipos', label: 'Equipos' },
+  hasPlayerStats && { id: 'estadisticas', label: 'Estadísticas' },
+].filter((t): t is { id: string; label: string } => !!t);
 ---
 
 <Base
-  title={`${tournament.name} | Parches`}
-  description={tournament.description ?? `Sigue ${tournament.name} en vivo en Parches.`}
+  title={`${tournament.name} | Chapi`}
+  description={tournament.description ?? `Sigue ${tournament.name} en vivo en Chapi.`}
 >
 
-  <!-- Tournament hero header -->
+  <!-- Header: branding dinámico (paleta / foto de fondo) -->
   <TournamentHero tournament={tournament} />
 
   <main class="t-page">
     <div class="t-page__inner">
+      <!-- Partidos en vivo, o el próximo si no hay ninguno -->
+      <TournamentLiveBar
+        liveMatches={liveMatches}
+        nextMatch={nextMatch}
+        sport={tournament.sport}
+      />
+    </div>
 
-      <!-- Sticky section tabs -->
-      {hasTabs && (
-        <nav class="t-tabs" id="tTabs" aria-label="Secciones del torneo">
-          {liveNow.length > 0 && (
-            <a href="#en-vivo" class="t-tab t-tab--live">
-              <span class="t-tab__dot" aria-hidden="true"></span>
-              En vivo
-            </a>
-          )}
-          {tournament.standings && (
-            <a href="#tabla" class="t-tab">Tabla</a>
-          )}
-          {teams.length > 0 && (
-            <a href="#equipos" class="t-tab">Equipos</a>
-          )}
-          {hasFixture && (
-            <a href="#fixture" class="t-tab">Fixture</a>
-          )}
-          {tournament.playerStats?.length && (
-            <a href="#estadisticas" class="t-tab">Estadísticas</a>
-          )}
-        </nav>
-      )}
+    <!-- Fixture / navegador de fechas — ancho completo de la pantalla -->
+    <TournamentFixtureStrip
+      groups={tournament.groups}
+      playoffGroups={tournament.playoffGroups}
+      showPlayoffs={showPlayoffs}
+      sport={tournament.sport}
+      brandColor={tournament.brandColor}
+    />
 
-      <!-- Live now mini strip -->
-      {liveNow.length > 0 && (
-        <section id="en-vivo" class="t-section" aria-label="Partidos en vivo">
-          <LiveStrip matches={liveNow} />
-        </section>
-      )}
+    <div class="t-page__inner">
+      <!-- Menú navegable de secciones (tabs con click, no scroll-spy) -->
+      <nav class="t-tabs" id="tTabs" aria-label="Secciones del torneo">
+        {tabs.map((tab, i) => (
+          <button
+            type="button"
+            class:list={['t-tab', i === 0 && 't-tab--active']}
+            role="tab"
+            aria-selected={i === 0 ? 'true' : 'false'}
+            aria-controls={`panel-${tab.id}`}
+            id={`tab-${tab.id}`}
+            data-tab-target={tab.id}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-      <!-- Standings -->
-      {tournament.standings && (
-        <section id="tabla" class="t-section" aria-label="Tabla de posiciones">
+      <!-- Tabla -->
+      {hasStandings && (
+        <div
+          class:list={['t-panel', tabs[0]?.id === 'tabla' && 't-panel--active']}
+          id="panel-tabla"
+          role="tabpanel"
+          aria-labelledby="tab-tabla"
+          data-tab-panel="tabla"
+          hidden={tabs[0]?.id !== 'tabla'}
+        >
           <StandingsTable
             standings={tournament.standings}
+            groups={tournament.standingsGroups}
             sport={tournament.sport}
-            qualifyingSpots={4}
+            qualifyingSpots={tournament.qualifyingSpots ?? 4}
             brandColor={tournament.brandColor}
           />
-        </section>
+        </div>
       )}
 
-      <!-- Teams -->
+      <!-- Equipos -->
       {teams.length > 0 && (
-        <section id="equipos" class="t-section" aria-label="Equipos del torneo">
+        <div
+          class:list={['t-panel', tabs[0]?.id === 'equipos' && 't-panel--active']}
+          id="panel-equipos"
+          role="tabpanel"
+          aria-labelledby="tab-equipos"
+          data-tab-panel="equipos"
+          hidden={tabs[0]?.id !== 'equipos'}
+        >
           <TeamsGrid
             teams={teams}
-            standings={tournament.standings}
+            standings={getAllStandingsRows(tournament)}
             brandColor={tournament.brandColor}
           />
-        </section>
+        </div>
       )}
 
-      <!-- Fixture: Todos contra todos | Playoffs (bracket) -->
-      {hasFixture && (
-        <section id="fixture" class="t-section" aria-label="Fixture del torneo">
-          <MatchFixture
-            groups={tournament.groups}
-            playoffGroups={tournament.playoffGroups}
-            showPlayoffs={showPlayoffs}
-            brandColor={tournament.brandColor}
-          />
-        </section>
-      )}
-
-      <!-- Player stats (goleadores, valla, etc.) -->
-      {tournament.playerStats?.length && (
-        <section id="estadisticas" class="t-section" aria-label="Estadísticas de jugadores">
+      <!-- Estadísticas (tab adicional, solo si hay datos) -->
+      {hasPlayerStats && (
+        <div
+          class:list={['t-panel', tabs[0]?.id === 'estadisticas' && 't-panel--active']}
+          id="panel-estadisticas"
+          role="tabpanel"
+          aria-labelledby="tab-estadisticas"
+          data-tab-panel="estadisticas"
+          hidden={tabs[0]?.id !== 'estadisticas'}
+        >
           <PlayerStatsTable
-            stats={tournament.playerStats}
+            stats={tournament.playerStats ?? []}
             brandColor={tournament.brandColor}
           />
-        </section>
+        </div>
       )}
+
+      <!-- Noticias / Foro — ya no es una pestaña: sección propia, siempre
+           visible debajo de Tabla/Equipos. 75% de ancho en pantallas
+           grandes (>= ~15"), 100% en pantallas más chicas. -->
+      <section class="t-news-section" aria-label="Noticias y comunicados del torneo">
+        <TournamentNewsFeed
+          posts={newsPosts}
+          tournamentSlug={tournament.slug}
+          brandColor={tournament.brandColor}
+        />
+      </section>
 
     </div><!-- /.t-page__inner -->
   </main>
@@ -155,7 +198,7 @@ const hasTabs = !!(
   margin: 0 auto;
 }
 
-/* Sticky section tabs */
+/* Section tabs — click to switch, sticky under the navbar */
 .t-tabs {
   display: flex;
   gap: 4px;
@@ -167,8 +210,12 @@ const hasTabs = !!(
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  margin: 8px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.t-tabs::-webkit-scrollbar { display: none; }
+
 .t-tab {
   font-family: var(--font-display);
   font-size: 0.78rem;
@@ -176,71 +223,67 @@ const hasTabs = !!(
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
   transition: color var(--transition), background var(--transition);
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-.t-tab:hover {
-  color: var(--text-primary);
-  background: var(--bg-raised);
-}
-.t-tab--live {
-  color: var(--live);
-  background: var(--live-dim);
-  border: 1px solid rgba(255,59,59,0.25);
-}
-.t-tab--live:hover { opacity: 0.85; }
-
-.t-tab__dot {
-  width: 5px; height: 5px;
-  background: var(--live);
-  border-radius: 50%;
-  animation: pulse-dot 1.2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)}
+.t-tab:hover { color: var(--text-primary); background: var(--bg-raised); }
+.t-tab--active {
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
-/* Sections spacing */
-.t-section {
-  padding-top: 28px;
-  scroll-margin-top: 100px; /* offset for sticky tabs */
+/* Panels */
+.t-panel {
+  padding-top: 24px;
+}
+.t-panel[hidden] { display: none; }
+
+/* Noticias / Foro — sección propia (no es tab), siempre debajo de
+   Tabla/Equipos. En pantallas grandes (>= ~15", ~1440px) se angosta al
+   75% del ancho de la página; en pantallas más chicas ocupa el 100%. */
+.t-news-section {
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+@media (min-width: 1440px) {
+  .t-news-section {
+    max-width: 75%;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 </style>
 
 <script>
-  // Highlight active tab on scroll
   (function () {
-    const tabs    = document.querySelectorAll<HTMLAnchorElement>('.t-tab');
-    const sections = document.querySelectorAll<HTMLElement>('.t-section');
-    if (!tabs.length || !sections.length) return;
+    const nav = document.getElementById('tTabs');
+    if (!nav) return;
 
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const id = entry.target.id;
-            tabs.forEach(tab => {
-              const isActive = tab.getAttribute('href') === `#${id}`;
-              if (!tab.classList.contains('t-tab--live')) {
-                tab.style.color = isActive
-                  ? 'var(--accent)'
-                  : '';
-                tab.style.background = isActive
-                  ? 'var(--accent-dim)'
-                  : '';
-              }
-            });
-          }
+    const tabs   = nav.querySelectorAll<HTMLButtonElement>('[data-tab-target]');
+    const panels = document.querySelectorAll<HTMLElement>('[data-tab-panel]');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tabTarget;
+
+        tabs.forEach(t => {
+          const active = t === tab;
+          t.classList.toggle('t-tab--active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
         });
-      },
-      { rootMargin: '-40% 0px -55% 0px' }
-    );
 
-    sections.forEach(s => observer.observe(s));
+        panels.forEach(panel => {
+          const active = panel.getAttribute('data-tab-panel') === target;
+          panel.classList.toggle('t-panel--active', active);
+          panel.hidden = !active;
+        });
+      });
+    });
   })();
 </script>

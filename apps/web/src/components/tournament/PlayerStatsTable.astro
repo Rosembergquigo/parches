@@ -7,8 +7,13 @@
  * existen — el componente no sabe nada de fútbol ni de basket.
  *
  * Fútbol:      Goleadores | Valla menos vencida
- * Baloncesto:  Anotadores | Reboteadores | Asistentes   (a futuro)
+ * Baloncesto:  Anotadores | Reboteadores | Asistencias
+ * Voleibol:    Anotadores | Aces
  * Tenis:       Aces | Doble faltas                       (a futuro)
+ *
+ * Ver SPORT_LEADERBOARDS en apps/api/src/routes/tournaments.ts — ahí se
+ * define, por deporte, qué campos de PlayerTournamentStat.stats se
+ * rankean para armar cada tab.
  *
  * Los tabs funcionan con JS vanilla inline — sin React, sin libs.
  * El primer tab está activo por defecto desde el servidor.
@@ -187,7 +192,7 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 6px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   background: transparent;
