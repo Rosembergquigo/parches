@@ -11,6 +11,7 @@
  */
 import SportIcon from '../ui/SportIcon.astro';
 import MatchCard from '../match/MatchCard.astro';
+import { isIndividualSport } from '@parches/config';
 import type { TournamentWithMatches } from '../../data/mock';
 
 interface Props {
@@ -35,7 +36,11 @@ const metaParts = [
   sport.charAt(0).toUpperCase() + sport.slice(1),
   stage,
   liveCount > 0 ? `${liveCount} partido${liveCount > 1 ? 's' : ''} en vivo` : null,
-  !liveCount && teamCount ? `${teamCount} equipos` : null,
+  !liveCount && teamCount
+    ? `${teamCount} ${isIndividualSport(sport)
+      ? (teamCount === 1 ? 'jugador' : 'jugadores')
+      : 'equipos'}`
+    : null,
 ].filter(Boolean).join(' · ');
 ---
 
@@ -65,12 +70,28 @@ const metaParts = [
   </div>
 
   <!-- Match cards horizontal strip -->
-  <div class="t-row__strip" role="list" aria-label={`Partidos de ${name}`}>
-    {matches.map(match => (
-      <div role="listitem">
-        <MatchCard match={match} sport={sport} />
-      </div>
-    ))}
+  <div class="t-row__scroller">
+    <div class="t-row__fade t-row__fade--prev" hidden aria-hidden="true"></div>
+    <button type="button" class="t-row__nav t-row__nav--prev" hidden aria-label="Partidos anteriores">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </button>
+    <div class="t-row__strip" role="list" aria-label={`Partidos de ${name}`}>
+      {matches.map(match => (
+        <div role="listitem">
+          <MatchCard match={match} sport={sport} />
+        </div>
+      ))}
+    </div>
+    <div class="t-row__fade t-row__fade--next" hidden aria-hidden="true"></div>
+    <button type="button" class="t-row__nav t-row__nav--next" hidden aria-label="Más partidos">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </button>
   </div>
 
 </section>
@@ -117,7 +138,6 @@ const metaParts = [
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
   line-height: 1;
 }
@@ -126,7 +146,6 @@ const metaParts = [
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   margin-top: 3px;
 }
@@ -139,7 +158,6 @@ const metaParts = [
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   text-decoration: none;
   transition: color var(--transition);
@@ -148,14 +166,15 @@ const metaParts = [
 .t-row__more:hover { color: var(--text-primary); }
 
 /* ── Match strip ────────────────────────────────────────── */
+.t-row__scroller {
+  position: relative;
+}
 .t-row__strip {
   display: flex;
   gap: 10px;
   overflow-x: auto;
   padding: 2px 24px 8px;
-  /* fade-out right edge hint */
-  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  scroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -166,4 +185,97 @@ const metaParts = [
   background: var(--border);
   border-radius: 2px;
 }
+.t-row__fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 96px;
+  pointer-events: none;
+  z-index: 3;
+}
+.t-row__fade--prev {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-base) 8%, transparent);
+}
+.t-row__fade--next {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-base) 8%, transparent);
+}
+.t-row__fade[hidden] { display: none; }
+.t-row__nav {
+  position: absolute;
+  top: 102px;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.t-row__nav:hover { background: rgba(0, 0, 0, 0.8); }
+.t-row__nav--prev { left: 30px; }
+.t-row__nav--next { right: 30px; }
+.t-row__nav[hidden] { display: none; }
+@media (max-width: 640px) {
+  .t-row__header { padding: 0 16px; }
+  .t-row__nav,
+  .t-row__fade { display: none; }
+}
 </style>
+
+<script>
+  function bindTournamentRows() {
+    document.querySelectorAll<HTMLElement>('.t-row').forEach(row => {
+      if (row.dataset.navBound === '1') return;
+      const strip = row.querySelector<HTMLElement>('.t-row__strip');
+      const prev = row.querySelector<HTMLButtonElement>('.t-row__nav--prev');
+      const next = row.querySelector<HTMLButtonElement>('.t-row__nav--next');
+      const fadePrev = row.querySelector<HTMLElement>('.t-row__fade--prev');
+      const fadeNext = row.querySelector<HTMLElement>('.t-row__fade--next');
+      if (!strip || !prev || !next || !fadePrev || !fadeNext) return;
+      row.dataset.navBound = '1';
+
+      const step = () => Math.max(280, Math.round(strip.clientWidth * 0.8));
+
+      const sync = () => {
+        const max = strip.scrollWidth - strip.clientWidth;
+        const hasOverflow = max > 8;
+        const atStart = strip.scrollLeft <= 8;
+        const atEnd = strip.scrollLeft >= max - 8;
+        prev.hidden = fadePrev.hidden = !hasOverflow || atStart;
+        next.hidden = fadeNext.hidden = !hasOverflow || atEnd;
+      };
+
+      const go = (dir: number) => {
+        const start = strip.scrollLeft;
+        const max = strip.scrollWidth - strip.clientWidth;
+        const target = Math.max(0, Math.min(max, start + dir * step()));
+        const duration = 420;
+        const t0 = performance.now();
+        const ease = (t: number) => 1 - (1 - t) ** 3;
+        const frame = (now: number) => {
+          const p = Math.min(1, (now - t0) / duration);
+          strip.scrollLeft = start + (target - start) * ease(p);
+          if (p < 1) requestAnimationFrame(frame);
+          else sync();
+        };
+        requestAnimationFrame(frame);
+      };
+
+      prev.addEventListener('click', () => go(-1));
+      next.addEventListener('click', () => go(1));
+      strip.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+      sync();
+    });
+  }
+
+  bindTournamentRows();
+  document.addEventListener('astro:page-load', bindTournamentRows);
+</script>

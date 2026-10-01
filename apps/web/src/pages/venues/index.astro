@@ -1,0 +1,122 @@
+---
+/**
+ * Directorio público de canchas y estadios.
+ * Visible para todos los perfiles. El alta de sedes llega después.
+ */
+import Base from '../../layouts/Base.astro';
+import VenueCard from '../../components/venue/VenueCard.astro';
+import { getVenues, venueSports, VENUE_SPORT_LABEL } from '../../data/venues';
+import type { Sport } from '../../data/mock';
+
+const venues = getVenues();
+const sports = venueSports(venues);
+const rawSport = Astro.url.searchParams.get('sport');
+const activeSport: Sport | 'all' =
+  rawSport && sports.includes(rawSport as Sport) ? (rawSport as Sport) : 'all';
+
+const visible = activeSport === 'all'
+  ? venues
+  : venues.filter(v => v.sports.includes(activeSport));
+
+const filters: { id: Sport | 'all'; label: string }[] = [
+  { id: 'all', label: 'Todos' },
+  ...sports.map(s => ({ id: s, label: VENUE_SPORT_LABEL[s] ?? s })),
+];
+---
+
+<Base
+  title="Canchas y estadios | Chapi"
+  description="Estadios, coliseos y canchas de fútbol, básquet, voleibol, tenis y más."
+>
+  <main class="venues">
+    <header class="venues__head">
+      <p class="venues__kicker">Sedes</p>
+      <h1 class="display-lg">Canchas y estadios</h1>
+      <p class="venues__lead">
+        Lugares para jugar y ver partidos. Dirección, contacto, fotos y mapa — abiertos para todos.
+      </p>
+    </header>
+
+    <nav class="venues__filters" aria-label="Filtrar por deporte">
+      {filters.map(f => (
+        <a
+          href={f.id === 'all' ? '/venues' : `/venues?sport=${f.id}`}
+          class:list={['venues__chip', f.id === activeSport && 'is-active']}
+        >
+          {f.label}
+        </a>
+      ))}
+    </nav>
+
+    {visible.length === 0 ? (
+      <p class="venues__empty">No hay sedes publicadas para este deporte.</p>
+    ) : (
+      <div class="venues__grid">
+        {visible.map(venue => (
+          <VenueCard venue={venue} />
+        ))}
+      </div>
+    )}
+  </main>
+</Base>
+
+<style>
+.venues {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+.venues__head { margin-bottom: 22px; max-width: 640px; }
+.venues__kicker {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+.venues__lead {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 10px 0 0;
+}
+.venues__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.venues__chip {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.venues__chip:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.venues__chip.is-active {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.venues__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.venues__empty {
+  color: var(--text-secondary);
+  padding: 40px 0;
+}
+
+@media (max-width: 960px) {
+  .venues__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .venues__grid { grid-template-columns: 1fr; }
+}
+</style>

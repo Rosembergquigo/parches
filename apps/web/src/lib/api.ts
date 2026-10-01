@@ -21,6 +21,8 @@ import type {
   HistoryMatchItem,
   OrganizationSummary,
   OrganizationDetail,
+  TournamentNewsPost,
+  TournamentNewsCategory,
 } from '../data/mock';
 import {
   mapTournamentListItem,
@@ -188,8 +190,8 @@ export async function getMatchDetail(id: string, request?: Request): Promise<Mat
 
 /**
  * Perfil de usuario por id — para pages/users/[id].astro (público) y
- * pages/profile.astro (propio, roles VIEWER/REFEREE/ORGANIZER/ADMIN).
- * Null si no existe (404). Para rol PLAYER usar `getPlayerProfile`.
+ * pages/profile.astro (cuenta visualizador) y pages/users/[id].astro.
+ * Null si no existe (404). Para el módulo jugador usar `getPlayerProfile`.
  */
 export async function getUserProfile(id: string, request?: Request): Promise<UserProfile | null> {
   try {
@@ -201,7 +203,7 @@ export async function getUserProfile(id: string, request?: Request): Promise<Use
   }
 }
 
-/** Perfil de jugador (con inscripciones y stats) — para pages/profile.astro, rol PLAYER. */
+/** Perfil de jugador (con inscripciones y stats) — para /me/player. */
 export async function getPlayerProfile(id: string, request?: Request): Promise<PlayerProfileDetail | null> {
   try {
     const raw = await api.get<RawUser>(`/users/${id}`, request);
@@ -212,7 +214,7 @@ export async function getPlayerProfile(id: string, request?: Request): Promise<P
   }
 }
 
-/** Próximos partidos asignados + historial arbitrado — para pages/profile.astro, rol REFEREE. */
+/** Próximos partidos asignados + historial arbitrado — para /me/referee. */
 export async function getRefereeMatches(
   id: string,
   request?: Request
@@ -245,11 +247,241 @@ export async function getPublicProfile(id: string, request?: Request): Promise<P
   return { role: raw.role, user: mapUserProfile(raw) };
 }
 
-/** Empresas del usuario autenticado — para pages/profile.astro. */
+/** Empresas del usuario autenticado — sesión y cuenta visualizador. */
 export async function getMyOrganizations(request: Request): Promise<OrganizationSummary[]> {
   try {
     const raw = await api.get<RawOrganization[]>('/organizations/me', request);
     return raw.map(mapOrganizationSummary);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) return [];
+    throw err;
+  }
+}
+
+export type RawTournamentPost = {
+  id: string;
+  category: 'COMUNICADO' | 'NOTICIA' | 'ANUNCIO';
+  title: string;
+  body: string;
+  excerpt: string | null;
+  coverImageUrl: string | null;
+  imageUrls: string[];
+  pinned: boolean;
+  createdAt: string;
+  author: { id: string; name: string };
+};
+
+const POST_CATEGORY_LABEL: Record<RawTournamentPost['category'], TournamentNewsCategory> = {
+  COMUNICADO: 'Comunicado',
+  NOTICIA: 'Noticia',
+  ANUNCIO: 'Anuncio',
+};
+
+export function mapTournamentPost(raw: RawTournamentPost): TournamentNewsPost {
+  return {
+    id: raw.id,
+    category: POST_CATEGORY_LABEL[raw.category] ?? 'Noticia',
+    title: raw.title,
+    excerpt: raw.excerpt ?? raw.body.slice(0, 180),
+    body: raw.body,
+    author: raw.author?.name ?? 'Organización',
+    publishedAt: raw.createdAt,
+    pinned: raw.pinned,
+    coverImageUrl: raw.coverImageUrl ?? undefined,
+    imageUrls: raw.imageUrls ?? [],
+  };
+}
+
+/** Posts del foro / blog de un torneo. */
+export async function getTournamentPosts(
+  tournamentIdOrSlug: string,
+  request?: Request
+): Promise<TournamentNewsPost[]> {
+  try {
+    const raw = await api.get<RawTournamentPost[]>(`/tournaments/${tournamentIdOrSlug}/posts`, request);
+    return raw.map(mapTournamentPost);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return [];
+    throw err;
+  }
+}
+
+export async function getTournamentPost(
+  tournamentIdOrSlug: string,
+  postId: string,
+  request?: Request
+): Promise<TournamentNewsPost | null> {
+  try {
+    const raw = await api.get<RawTournamentPost>(
+      `/tournaments/${tournamentIdOrSlug}/posts/${postId}`,
+      request
+    );
+    return mapTournamentPost(raw);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function uploadImage(
+  file: File,
+  request: Request,
+  kind: 'posts' | 'teams' | 'tournaments' | 'orgs' | 'users' = 'posts'
+): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { url } = await api.post<{ url: string }>('/uploads', {
+    filename: file.name,
+    mime: file.type,
+    data: buffer.toString('base64'),
+    kind,
+  }, request);
+  return url;
+}
+
+export async function uploadPostImage(
+  file: File,
+  request: Request
+): Promise<string> {
+  return uploadImage(file, request, 'posts');
+}
+
+export async function uploadTeamLogo(
+  file: File,
+  request: Request
+): Promise<string> {
+  return uploadImage(file, request, 'teams');
+}
+
+export async function uploadTournamentLogo(
+  file: File,
+  request: Request
+): Promise<string> {
+  return uploadImage(file, request, 'tournaments');
+}
+
+export async function uploadUserAvatar(
+  file: File,
+  request: Request
+): Promise<string> {
+  return uploadImage(file, request, 'users');
+}
+
+export type RefereeOption = { id: string; name: string };
+
+export type TeamEnrollment = {
+  id: string;
+  jerseyNumber: number | null;
+  position: string | null;
+  isActive: boolean;
+  joinedAt: string;
+  player: {
+    id: string;
+    playerProfileId: string;
+    email: string;
+    name: string;
+    phone: string | null;
+  };
+};
+
+export type AddTeamPlayerInput = {
+  email: string;
+  name?: string;
+  phone?: string;
+  jerseyNumber?: number | null;
+  position?: string;
+};
+
+export type UpdateTeamEnrollmentInput = {
+  jerseyNumber?: number | null;
+  position?: string | null;
+  isActive?: boolean;
+  name?: string;
+  phone?: string | null;
+};
+
+export type CaptainedTeam = {
+  id: string;
+  name: string;
+  shortName: string;
+  logoUrl?: string | null;
+  color?: string | null;
+  captainName?: string | null;
+  tournament: {
+    id: string;
+    name: string;
+    slug: string;
+    sport: string;
+    organization: { name: string; slug: string };
+  };
+};
+
+export function listCaptainedTeams(request: Request): Promise<CaptainedTeam[]> {
+  return api.get<CaptainedTeam[]>('/teams/captained', request);
+}
+
+export type TournamentEntry = {
+  teamId: string;
+  teamName: string;
+  shortName: string;
+  enrollmentId: string;
+};
+
+export async function getMyTournamentEntry(
+  tournamentIdOrSlug: string,
+  request: Request
+): Promise<TournamentEntry | null> {
+  try {
+    return await api.get<TournamentEntry>(`/tournaments/${tournamentIdOrSlug}/entries/me`, request);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 401)) return null;
+    throw err;
+  }
+}
+
+export function enrollInTournament(
+  tournamentIdOrSlug: string,
+  request: Request
+): Promise<TournamentEntry> {
+  return api.post<TournamentEntry>(`/tournaments/${tournamentIdOrSlug}/entries`, {}, request);
+}
+
+/** Plantilla del equipo (activos e inactivos). Requiere editor o capitán. */
+export function listTeamEnrollments(teamId: string, request: Request): Promise<TeamEnrollment[]> {
+  return api.get<TeamEnrollment[]>(`/teams/${teamId}/enrollments`, request);
+}
+
+/** Inscribe un jugador por correo (crea el usuario si no existe). */
+export function addTeamPlayer(
+  teamId: string,
+  body: AddTeamPlayerInput,
+  request: Request
+): Promise<TeamEnrollment> {
+  return api.post<TeamEnrollment>(`/teams/${teamId}/enrollments`, body, request);
+}
+
+/** Edita dorsal, posición, estado o datos de contacto del inscrito. */
+export function updateTeamEnrollment(
+  teamId: string,
+  enrollmentId: string,
+  body: UpdateTeamEnrollmentInput,
+  request: Request
+): Promise<TeamEnrollment> {
+  return api.patch<TeamEnrollment>(`/teams/${teamId}/enrollments/${enrollmentId}`, body, request);
+}
+
+/** Da de baja al jugador del equipo (conserva historial). */
+export function removeTeamPlayer(
+  teamId: string,
+  enrollmentId: string,
+  request: Request
+): Promise<void> {
+  return api.delete(`/teams/${teamId}/enrollments/${enrollmentId}`, request);
+}
+
+/** Árbitros disponibles para asignar a un partido. */
+export async function getReferees(request: Request): Promise<RefereeOption[]> {
+  try {
+    return await api.get<RefereeOption[]>('/users/referees', request);
   } catch (err) {
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) return [];
     throw err;

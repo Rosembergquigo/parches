@@ -8,10 +8,34 @@
  *
  * GET /me se registra antes de /:idOrSlug para que "me" no se tome como slug.
  */
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { generateUniqueOrganizationSlug, organizationWhere } from '../lib/slug.js';
 import { ORG_ADMIN_ROLES, requireOrgRole, userIdFrom } from '../lib/authz.js';
+import { parseTeamColor } from '../lib/enrollments.js';
+import { withTournamentLooks } from '../lib/playerPhoto.js';
+
+function parseOrgLogoUrl(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  if (typeof raw !== 'string') {
+    throw Object.assign(new Error('El logo no es válido'), { statusCode: 400 });
+  }
+  const value = raw.trim();
+  if (/^\/uploads\/orgs\/[A-Za-z0-9._-]+$/.test(value)) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'http:' || url.protocol === 'https:') return value;
+  } catch {
+    /* fall through */
+  }
+  throw Object.assign(new Error('El logo no es válido'), { statusCode: 400 });
+}
+
+function sendParseError(reply: FastifyReply, err: unknown) {
+  const e = err as Error & { statusCode?: number };
+  return reply.status(e.statusCode ?? 400).send({ error: e.message });
+}
 
 const orgPublicInclude = {
   tournaments: {
@@ -44,14 +68,23 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
     const slug = await generateUniqueOrganizationSlug(name);
     const userId = userIdFrom(req);
 
+    let brandColor: string | null | undefined;
+    let logoUrl: string | null | undefined;
+    try {
+      brandColor = parseTeamColor(req.body.brandColor);
+      logoUrl = parseOrgLogoUrl(req.body.logoUrl);
+    } catch (err) {
+      return sendParseError(reply, err);
+    }
+
     const organization = await prisma.organization.create({
       data: {
         name,
         slug,
-        description: req.body.description,
-        city: req.body.city,
-        brandColor: req.body.brandColor,
-        logoUrl: req.body.logoUrl,
+        description: req.body.description?.trim() || null,
+        city: req.body.city?.trim() || null,
+        brandColor: brandColor ?? null,
+        logoUrl: logoUrl ?? null,
         members: { create: { userId, role: 'OWNER' } },
       },
       include: { _count: { select: { members: true, tournaments: true } } },
@@ -99,17 +132,20 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
       // público — sin sesión
     }
 
-    return reply.send({ ...organization, myRole });
+    const tournaments = await Promise.all(
+      organization.tournaments.map(t => withTournamentLooks(t)),
+    );
+    return reply.send({ ...organization, tournaments, myRole });
   });
 
   app.patch<{
     Params: { idOrSlug: string };
     Body: Partial<{
       name: string;
-      description: string;
-      city: string;
-      brandColor: string;
-      logoUrl: string;
+      description: string | null;
+      city: string | null;
+      brandColor: string | null;
+      logoUrl: string | null;
     }>;
   }>('/:idOrSlug', { onRequest: [app.authenticate] }, async (req, reply) => {
     const existing = await prisma.organization.findFirst({
@@ -118,9 +154,42 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) return reply.status(404).send({ error: 'Not found' });
     if (!(await requireOrgRole(req, reply, existing.id, ORG_ADMIN_ROLES))) return;
 
+    const body = req.body ?? {};
+    const data: {
+      name?: string;
+      description?: string | null;
+      city?: string | null;
+      brandColor?: string | null;
+      logoUrl?: string | null;
+    } = {};
+
+    if (body.name !== undefined) {
+      const nextName = body.name.trim();
+      if (!nextName) return reply.status(400).send({ error: 'name is required' });
+      data.name = nextName;
+    }
+    if (body.description !== undefined) {
+      data.description = typeof body.description === 'string' ? (body.description.trim() || null) : null;
+    }
+    if (body.city !== undefined) {
+      data.city = typeof body.city === 'string' ? (body.city.trim() || null) : null;
+    }
+    try {
+      if (body.brandColor !== undefined) {
+        const color = parseTeamColor(body.brandColor);
+        if (color !== undefined) data.brandColor = color;
+      }
+      if (body.logoUrl !== undefined) {
+        const logo = parseOrgLogoUrl(body.logoUrl);
+        if (logo !== undefined) data.logoUrl = logo;
+      }
+    } catch (err) {
+      return sendParseError(reply, err);
+    }
+
     const organization = await prisma.organization.update({
       where: { id: existing.id },
-      data: req.body,
+      data,
       include: { _count: { select: { members: true, tournaments: true } } },
     });
     return reply.send(organization);

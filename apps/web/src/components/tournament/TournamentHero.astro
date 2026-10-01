@@ -13,6 +13,7 @@
  *                           un avatar circular con las iniciales del nombre.
  */
 import SportIcon from '../ui/SportIcon.astro';
+import { isIndividualSport } from '@parches/config';
 import type { TournamentDetail } from '../../data/mock';
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
 
 const { tournament } = Astro.props;
 const { name, sport, stage, status, teamCount, description, brandColor, logoUrl, backgroundImageUrl } = tournament;
+const individual = isIndividualSport(sport);
 
 const liveMatches = tournament.matches.filter(m => m.status === 'LIVE').length;
 
@@ -112,8 +114,8 @@ const sportLabel: Record<string, string> = {
             src={logoUrl}
             alt={`Logo ${name}`}
             class="t-hero__logo-img"
-            width="56"
-            height="56"
+            width="80"
+            height="80"
             loading="eager"
           />
         </div>
@@ -165,13 +167,16 @@ const sportLabel: Record<string, string> = {
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
-              {teamCount} equipos
+              {teamCount} {individual
+                ? (teamCount === 1 ? 'jugador' : 'jugadores')
+                : 'equipos'}
             </span>
           )}
           {description && (
             <p class="t-hero__description">{description}</p>
           )}
         </div>
+        <slot name="entry" />
       </div>
     </div>
 
@@ -181,7 +186,8 @@ const sportLabel: Record<string, string> = {
 <style>
 .t-hero {
   position: relative;
-  min-height: 200px;
+  min-height: calc(300px + var(--nav-offset));
+  margin-top: calc(-1 * var(--nav-offset));
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -196,8 +202,25 @@ const sportLabel: Record<string, string> = {
 }
 .t-hero__fade {
   position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(10,12,15,0.95) 0%, transparent 60%);
+  background: linear-gradient(
+    to top,
+    var(--bg-base) 0%,
+    rgba(23, 23, 27, 0.88) 30%,
+    rgba(23, 23, 27, 0.4) 60%,
+    transparent 84%
+  );
   pointer-events: none;
+}
+.t-hero::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--bg-base) 70%, var(--bg-base));
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Background image + overlay (cuando el organizador subió una foto) */
@@ -212,7 +235,7 @@ const sportLabel: Record<string, string> = {
   pointer-events: none;
 }
 .t-hero--photo {
-  min-height: 240px;
+  min-height: calc(240px + var(--nav-offset));
 }
 .t-hero__content {
   position: relative;
@@ -220,7 +243,7 @@ const sportLabel: Record<string, string> = {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 32px 28px 28px;
+  padding: calc(var(--nav-offset) + 16px) 28px 28px;
 }
 
 /* Breadcrumb */
@@ -233,7 +256,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .t-hero__breadcrumb a {
@@ -310,7 +332,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid rgba(0,229,255,.3);
@@ -322,7 +343,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -336,7 +356,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--live);
   padding: 2px 8px;
   border: 1px solid var(--live);
@@ -355,7 +374,7 @@ const sportLabel: Record<string, string> = {
 .t-hero__upcoming {
   font-family: var(--font-display);
   font-size: 0.65rem; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid rgba(0,229,255,.3);
@@ -364,7 +383,7 @@ const sportLabel: Record<string, string> = {
 .t-hero__finished {
   font-family: var(--font-display);
   font-size: 0.65rem; font-weight: 600;
-  letter-spacing: 0.09em; text-transform: uppercase;
+  letter-spacing: 0.09em;
   color: var(--text-muted);
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -377,7 +396,6 @@ const sportLabel: Record<string, string> = {
   font-size: clamp(1.6rem, 4vw, 2.6rem);
   font-weight: 900;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   color: var(--text-primary);
   line-height: 1;
   margin-bottom: 10px;
@@ -398,7 +416,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 .t-hero__description {
@@ -407,5 +424,8 @@ const sportLabel: Record<string, string> = {
   color: var(--text-secondary);
   line-height: 1.5;
   max-width: 560px;
+}
+@media (max-width: 768px) {
+  .t-hero__content { padding-left: 20px; padding-right: 20px; }
 }
 </style>

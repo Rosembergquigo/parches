@@ -1,0 +1,87 @@
+---
+/**
+ * Sube o quita la foto de perfil. Va dentro de un form multipart
+ * con intent=avatar (el page handler hace PATCH /auth/me).
+ */
+import { mediaUrl } from '../../lib/media';
+
+interface Props {
+  name: string;
+  photoUrl?: string | null;
+}
+
+const { name, photoUrl } = Astro.props;
+const src = mediaUrl(photoUrl);
+const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || '?';
+---
+
+<div class="pavatar">
+  <label class="pavatar__mark">
+    {src ? (
+      <img src={src} alt="" class="pavatar__img" />
+    ) : (
+      <span class="pavatar__initials">{initials}</span>
+    )}
+    <input
+      type="file"
+      name="avatar"
+      class="pavatar__file"
+      accept="image/jpeg,image/png,image/webp,image/gif"
+      aria-label="Foto de perfil"
+    />
+    <span class="pavatar__hint">Cambiar foto</span>
+  </label>
+  {src && (
+    <label class="pavatar__clear">
+      <input type="checkbox" name="clearAvatar" value="1" />
+      Quitar foto
+    </label>
+  )}
+</div>
+
+<style>
+.pavatar { display: flex; flex-direction: column; gap: 8px; }
+.pavatar__mark {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  cursor: pointer;
+}
+.pavatar__img, .pavatar__initials {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pavatar__img { object-fit: cover; border: 1px solid var(--border); }
+.pavatar__initials {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.pavatar__file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pavatar__hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.pavatar__clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.pavatar__clear input { accent-color: var(--accent); }
+</style>

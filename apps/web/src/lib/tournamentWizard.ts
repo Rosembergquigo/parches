@@ -5,6 +5,8 @@
  * aplica), equipos y opcionalmente el fixture todos-contra-todos.
  * Si falla a mitad, se intenta borrar el torneo para no dejar basura.
  */
+import { toTitleCase } from '@parches/utils';
+import { isIndividualSport } from '@parches/config';
 import { api } from './api';
 
 export const WIZARD_SPORTS = [
@@ -35,7 +37,7 @@ export interface WizardInput {
   logoUrl: string;
   backgroundImageUrl: string;
   description: string;
-  format: 'league' | 'groups';
+  format: 'league' | 'groups' | 'knockout';
   groupCount: number;
   hasPlayoffs: boolean;
   qualifyingSpots: number;
@@ -90,18 +92,31 @@ export function readWizardForm(form: FormData): WizardInput {
   const groups = form.getAll('teamGroup').map(v => Number(v));
 
   const teams: WizardTeam[] = names.map((name, i) => ({
-    name: name.trim(),
+    name: toTitleCase(name),
     shortName: String(shorts[i] ?? '').trim().toUpperCase(),
     color: String(colors[i] ?? '').trim() || DEFAULT_TEAM_COLORS[i % DEFAULT_TEAM_COLORS.length]!,
     groupIndex: Number.isFinite(groups[i]) ? groups[i]! : 0,
   }));
 
-  const format = form.get('format') === 'groups' ? 'groups' : 'league';
+  const formatRaw = String(form.get('format') ?? '');
+  const format: WizardInput['format'] =
+    formatRaw === 'groups' || formatRaw === 'knockout'
+      ? formatRaw
+      : 'league';
   const groupCount = Math.min(8, Math.max(2, Number(form.get('groupCount')) || 2));
+  const sport = String(form.get('sport') ?? 'football');
+  const fixtureRaw = form.get('fixtureMode');
+  let fixtureMode: WizardInput['fixtureMode'] =
+    fixtureRaw === 'skip' || fixtureRaw === 'generate'
+      ? fixtureRaw
+      : isIndividualSport(sport) || format === 'knockout'
+        ? 'skip'
+        : 'generate';
+  if (format === 'knockout') fixtureMode = 'skip';
 
   return {
     name: String(form.get('name') ?? '').trim(),
-    sport: String(form.get('sport') ?? 'football'),
+    sport,
     startDate: String(form.get('startDate') ?? ''),
     endDate: String(form.get('endDate') ?? ''),
     brandColor: String(form.get('brandColor') ?? '').trim(),
@@ -113,7 +128,7 @@ export function readWizardForm(form: FormData): WizardInput {
     hasPlayoffs: form.get('hasPlayoffs') === 'on',
     qualifyingSpots: Math.max(1, Number(form.get('qualifyingSpots')) || 2),
     teams,
-    fixtureMode: form.get('fixtureMode') === 'skip' ? 'skip' : 'generate',
+    fixtureMode,
     doubleRound: form.get('doubleRound') === 'on',
     venue: String(form.get('venue') ?? '').trim(),
     kickoff: String(form.get('kickoff') ?? '15:00').trim() || '15:00',
@@ -130,15 +145,24 @@ export function validateWizard(data: WizardInput): string | null {
   }
 
   const teams = data.teams.filter(t => t.name || t.shortName);
-  if (teams.length < 2) return 'Agrega al menos 2 equipos';
-  for (const t of teams) {
-    if (!t.name || !t.shortName) return 'Cada equipo necesita nombre y abreviación';
-    if (!/^[A-Z0-9]{2,4}$/.test(t.shortName)) {
-      return 'La abreviación debe tener 2–4 letras o números';
+  if (isIndividualSport(data.sport)) {
+    for (const t of teams) {
+      if (!t.name || !t.shortName) return 'Cada jugador necesita nombre y abreviación';
+      if (!/^[A-Z0-9]{2,4}$/.test(t.shortName)) {
+        return 'La abreviación debe tener 2–4 letras o números';
+      }
+    }
+  } else {
+    if (teams.length < 2) return 'Agrega al menos 2 equipos';
+    for (const t of teams) {
+      if (!t.name || !t.shortName) return 'Cada equipo necesita nombre y abreviación';
+      if (!/^[A-Z0-9]{2,4}$/.test(t.shortName)) {
+        return 'La abreviación debe tener 2–4 letras o números';
+      }
     }
   }
 
-  if (data.format === 'groups') {
+  if (data.format === 'groups' && !(isIndividualSport(data.sport) && teams.length === 0)) {
     const used = new Set(teams.map(t => t.groupIndex));
     for (let i = 0; i < data.groupCount; i++) {
       if (!used.has(i)) return `${groupLabel(i)} no tiene equipos`;
@@ -179,7 +203,7 @@ export async function publishWizard(
       logoUrl: data.logoUrl || undefined,
       backgroundImageUrl: data.backgroundImageUrl || undefined,
       description: data.description || undefined,
-      hasPlayoffs: data.format === 'groups' && data.hasPlayoffs,
+      hasPlayoffs: data.format === 'knockout' || (data.format === 'groups' && data.hasPlayoffs),
       qualifyingSpots: data.format === 'groups' && data.hasPlayoffs
         ? data.qualifyingSpots
         : undefined,
@@ -214,7 +238,7 @@ export async function publishWizard(
       );
     }
 
-    if (data.fixtureMode === 'generate') {
+    if (data.fixtureMode === 'generate' && data.format !== 'knockout' && teams.length >= 2) {
       await api.post(
         `/tournaments/${tournament.id}/fixture/generate`,
         {

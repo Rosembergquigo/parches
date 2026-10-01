@@ -6,25 +6,29 @@
  * POST aquí → llama al api, si ok setea la cookie y redirige.
  */
 import Base from '../layouts/Base.astro';
-import { getJwtPayload, buildTokenCookie } from '../lib/auth';
 import { api } from '../lib/api';
-
-// Si ya está autenticado, no tiene sentido entrar a login
-const existing = await getJwtPayload(Astro.request);
-if (existing) return Astro.redirect('/');
-
-const next = Astro.url.searchParams.get('next') ?? '/';
+import { buildTokenCookie, getOptionalUser, safeNextPath } from '../lib/auth';
 
 let error: string | null = null;
+let email = '';
+let next = safeNextPath(Astro.url.searchParams.get('next'));
+const joining = next.includes('inscribir=1');
+
+if (Astro.request.method === 'GET') {
+  const existing = await getOptionalUser(Astro.request);
+  if (existing) return Astro.redirect(next);
+}
 
 if (Astro.request.method === 'POST') {
   try {
     const form = await Astro.request.formData();
-    const email = form.get('email') as string;
+    next = safeNextPath(String(form.get('next') ?? next));
+    email = String(form.get('email') ?? '').trim();
+    const password = String(form.get('password') ?? '');
 
     const { token } = await api.post<{ token: string; user: unknown }>(
       '/auth/login',
-      { email }
+      { email, password }
     );
 
     return new Response(null, {
@@ -47,7 +51,9 @@ if (Astro.request.method === 'POST') {
         <span class="accent-line"></span>
         <h1 class="display-md" style="margin-top: 12px;">Ingresar</h1>
         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 6px;">
-          Accede a tu cuenta para seguir tus torneos
+          {joining
+            ? 'Ingresa con tu email y clave para inscribirte'
+            : 'Email y clave de tu cuenta'}
         </p>
       </div>
 
@@ -70,6 +76,22 @@ if (Astro.request.method === 'POST') {
             autocomplete="email"
             placeholder="tu@email.com"
             class="form-input"
+            value={email}
+          />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="password">Clave</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            minlength="8"
+            maxlength="72"
+            autocomplete="current-password"
+            placeholder="Mínimo 8 caracteres"
+            class="form-input"
           />
         </div>
 
@@ -80,7 +102,7 @@ if (Astro.request.method === 'POST') {
 
       <p class="auth-footer">
         ¿No tienes cuenta?&nbsp;
-        <a href="/register" style="color: var(--accent);">Regístrate</a>
+        <a href={next === '/' ? '/register' : `/register?next=${encodeURIComponent(next)}`} style="color: var(--accent);">Regístrate</a>
       </p>
     </div>
   </main>

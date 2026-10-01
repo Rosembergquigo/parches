@@ -179,6 +179,21 @@ const age = getAge(player.dateOfBirth);
   flex: 1;
   min-width: 0;
 }
+.pph__photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.pph__photo-save {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
 .pph__avatar {
   width: 80px; height: 80px;
   border-radius: 14px;
@@ -213,7 +228,6 @@ const age = getAge(player.dateOfBirth);
   font-size: clamp(1.5rem, 3.5vw, 2.2rem);
   font-weight: 900;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   color: var(--text-primary);
   line-height: 1;
 }
@@ -225,7 +239,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 5px 10px;
   border: 1px solid var(--border);
@@ -249,7 +262,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid rgba(0,229,255,.35);
@@ -261,7 +273,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: rgba(255,255,255,0.7);
   padding: 2px 8px;
   border: 1px solid;
@@ -272,7 +283,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -301,7 +311,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .pph__phys-val {
@@ -309,7 +318,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
 }
 
@@ -343,7 +351,6 @@ const age = getAge(player.dateOfBirth);
   font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 

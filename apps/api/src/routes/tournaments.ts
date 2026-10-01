@@ -1,9 +1,23 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { generateUniqueTournamentSlug, tournamentWhere } from '../lib/slug.js';
-import { requireTournamentEditor } from '../lib/authz.js';
+import { requireTournamentEditor, userIdFrom } from '../lib/authz.js';
+import type { TournamentPostCategory } from '@prisma/client';
 import { dateForRound, planFixture } from '../lib/fixture.js';
+import { toTitleCase } from '../lib/text.js';
+import { isIndividualSport } from '@parches/config';
+import {
+  ensurePlayerUser,
+  findEnrollmentInTournament,
+  parseCaptain,
+  parseTeamColor,
+  sameTournamentConflict,
+  teamColorForIndex,
+  uniqueTeamShortName,
+} from '../lib/enrollments.js';
+import { notifyCaptainAssigned, kickoffRemindedValue, notifyMatchKickoff } from '../lib/notify.js';
+import { withPlayerPhotos, withTournamentLooks } from '../lib/playerPhoto.js';
 import {
   computeStandings,
   computeCompiledQualifiers,
@@ -25,6 +39,7 @@ interface PlayerStatRow {
   position: number;
   playerName: string;
   playerShortName: string;
+  playerAvatarUrl?: string | null;
   userId?: string;
   team: { id: string; name: string; shortName: string };
   statValue: number;
@@ -83,6 +98,7 @@ function buildLeaderboardTab(enrollments: EnrollmentWithStats[], def: Leaderboar
       position: i + 1,
       playerName: x.e.playerProfile.user.name,
       playerShortName: initials(x.e.playerProfile.user.name),
+      playerAvatarUrl: x.e.playerProfile.user.avatarUrl?.trim() || null,
       userId: x.e.playerProfile.user.id,
       team: { id: x.e.team.id, name: x.e.team.name, shortName: x.e.team.shortName },
       statValue: x.value,
@@ -92,21 +108,97 @@ function buildLeaderboardTab(enrollments: EnrollmentWithStats[], def: Leaderboar
   return rows.length > 0 ? { id: def.id, tabLabel: def.tabLabel, colHeader: def.colHeader, rows } : null;
 }
 
+function sendParseError(reply: FastifyReply, err: unknown) {
+  const e = err as Error & { statusCode?: number };
+  return reply.status(e.statusCode ?? 400).send({ error: e.message });
+}
+
+const TOURNAMENT_STATUSES = ['UPCOMING', 'LIVE', 'FINISHED'] as const;
+type TournamentStatusValue = (typeof TOURNAMENT_STATUSES)[number];
+
+function parseTournamentStatus(raw: unknown): TournamentStatusValue | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || !(TOURNAMENT_STATUSES as readonly string[]).includes(raw)) {
+    throw Object.assign(new Error('El estado no es válido'), { statusCode: 400 });
+  }
+  return raw as TournamentStatusValue;
+}
+
+function parseTournamentDate(raw: unknown): Date | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw Object.assign(new Error('La fecha no es válida'), { statusCode: 400 });
+  }
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    throw Object.assign(new Error('La fecha no es válida'), { statusCode: 400 });
+  }
+  return date;
+}
+
+/** Logo o portada: `/uploads/tournaments/...` o URL http(s). */
+function parseTournamentMediaUrl(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  if (typeof raw !== 'string') {
+    throw Object.assign(new Error('La imagen no es válida'), { statusCode: 400 });
+  }
+  const value = raw.trim();
+  if (/^\/uploads\/tournaments\/[A-Za-z0-9._-]+$/.test(value)) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      if (/^\/uploads\/tournaments\/[A-Za-z0-9._-]+$/.test(url.pathname)) return url.pathname;
+      return value;
+    }
+  } catch {
+    /* fall through */
+  }
+  throw Object.assign(new Error('La imagen no es válida'), { statusCode: 400 });
+}
+
 export const tournamentRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (_req, reply) => {
-    const tournaments = await prisma.tournament.findMany({
-      include: {
-        organization: { select: { id: true, slug: true, name: true, logoUrl: true, brandColor: true } },
-        teams: true,
-        matches: {
-          include: { homeTeam: true, awayTeam: true },
-          orderBy: [{ status: 'asc' }, { scheduledAt: 'asc' }, { createdAt: 'desc' }],
-          take: 6,
+    const matchInclude = {
+      homeTeam: true,
+      awayTeam: true,
+      referee: { select: { id: true, name: true } },
+    } as const;
+
+    const [tournaments, liveMatches] = await Promise.all([
+      prisma.tournament.findMany({
+        include: {
+          organization: { select: { id: true, slug: true, name: true, logoUrl: true, brandColor: true } },
+          teams: true,
+          matches: {
+            include: matchInclude,
+            where: { status: { notIn: ['LIVE', 'HALFTIME'] } },
+            orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+            take: 6,
+          },
         },
-      },
-      orderBy: { startDate: 'desc' },
-    });
-    return reply.send(tournaments);
+        orderBy: { startDate: 'desc' },
+      }),
+      prisma.match.findMany({
+        where: { status: { in: ['LIVE', 'HALFTIME'] } },
+        include: matchInclude,
+        orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+
+    const liveByTournament = new Map<string, typeof liveMatches>();
+    for (const match of liveMatches) {
+      const list = liveByTournament.get(match.tournamentId) ?? [];
+      list.push(match);
+      liveByTournament.set(match.tournamentId, list);
+    }
+
+    return reply.send(await Promise.all(
+      tournaments.map(async tournament => withTournamentLooks({
+        ...tournament,
+        matches: [...(liveByTournament.get(tournament.id) ?? []), ...tournament.matches],
+      })),
+    ));
   });
 
   // :idOrSlug acepta el uuid del torneo o su slug ("liga-betplay-2025").
@@ -117,12 +209,171 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
         organization: { select: { id: true, slug: true, name: true, logoUrl: true, brandColor: true } },
         teams: { include: { group: true } },
         groups: { orderBy: { order: 'asc' } },
-        matches: { include: { homeTeam: true, awayTeam: true }, orderBy: { createdAt: 'asc' } },
+        matches: {
+          include: {
+            homeTeam: true,
+            awayTeam: true,
+            referee: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!tournament) return reply.status(404).send({ error: 'Not found' });
-    return reply.send(tournament);
+    return reply.send(await withTournamentLooks(tournament));
   });
+
+  const POST_CATEGORIES = new Set<TournamentPostCategory>(['COMUNICADO', 'NOTICIA', 'ANUNCIO']);
+
+  function excerptFrom(body: string, excerpt?: string): string | null {
+    const text = (excerpt ?? body).replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+  }
+
+  const postInclude = { author: { select: { id: true, name: true } } } as const;
+
+  app.get<{ Params: { idOrSlug: string } }>('/:idOrSlug/posts', async (req, reply) => {
+    const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+    if (!tournament) return reply.status(404).send({ error: 'Not found' });
+    const posts = await prisma.tournamentPost.findMany({
+      where: { tournamentId: tournament.id },
+      include: postInclude,
+      orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+    });
+    return reply.send(posts);
+  });
+
+  app.get<{ Params: { idOrSlug: string; postId: string } }>('/:idOrSlug/posts/:postId', async (req, reply) => {
+    const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+    if (!tournament) return reply.status(404).send({ error: 'Not found' });
+    const post = await prisma.tournamentPost.findFirst({
+      where: { id: req.params.postId, tournamentId: tournament.id },
+      include: postInclude,
+    });
+    if (!post) return reply.status(404).send({ error: 'Not found' });
+    return reply.send(post);
+  });
+
+  app.post<{
+    Params: { idOrSlug: string };
+    Body: {
+      category?: string;
+      title: string;
+      body: string;
+      excerpt?: string;
+      coverImageUrl?: string;
+      imageUrls?: string[];
+      pinned?: boolean;
+    };
+  }>('/:idOrSlug/posts', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+    if (!tournament) return reply.status(404).send({ error: 'Not found' });
+    if (!(await requireTournamentEditor(req, reply, tournament.organizationId))) return;
+
+    const title = String(req.body?.title ?? '').trim();
+    const body = String(req.body?.body ?? '').trim();
+    if (!title || !body) {
+      return reply.status(400).send({ error: 'title and body are required' });
+    }
+
+    const rawCategory = String(req.body?.category ?? 'NOTICIA').toUpperCase();
+    const category = POST_CATEGORIES.has(rawCategory as TournamentPostCategory)
+      ? (rawCategory as TournamentPostCategory)
+      : 'NOTICIA';
+
+    const imageUrls = (req.body?.imageUrls ?? []).filter(u => typeof u === 'string' && u.startsWith('/uploads/'));
+    const coverImageUrl = req.body?.coverImageUrl?.startsWith('/uploads/')
+      ? req.body.coverImageUrl
+      : imageUrls[0];
+
+    const post = await prisma.tournamentPost.create({
+      data: {
+        tournamentId: tournament.id,
+        authorId: userIdFrom(req),
+        category,
+        title,
+        body,
+        excerpt: excerptFrom(body, req.body?.excerpt),
+        coverImageUrl,
+        imageUrls,
+        pinned: Boolean(req.body?.pinned),
+      },
+      include: postInclude,
+    });
+    return reply.status(201).send(post);
+  });
+
+  app.patch<{
+    Params: { idOrSlug: string; postId: string };
+    Body: {
+      category?: string;
+      title?: string;
+      body?: string;
+      excerpt?: string;
+      coverImageUrl?: string;
+      imageUrls?: string[];
+      pinned?: boolean;
+    };
+  }>('/:idOrSlug/posts/:postId', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+    if (!tournament) return reply.status(404).send({ error: 'Not found' });
+    if (!(await requireTournamentEditor(req, reply, tournament.organizationId))) return;
+
+    const existing = await prisma.tournamentPost.findFirst({
+      where: { id: req.params.postId, tournamentId: tournament.id },
+    });
+    if (!existing) return reply.status(404).send({ error: 'Not found' });
+
+    const title = req.body?.title !== undefined ? String(req.body.title).trim() : existing.title;
+    const body = req.body?.body !== undefined ? String(req.body.body).trim() : existing.body;
+    if (!title || !body) {
+      return reply.status(400).send({ error: 'title and body are required' });
+    }
+
+    const rawCategory = String(req.body?.category ?? existing.category).toUpperCase();
+    const category = POST_CATEGORIES.has(rawCategory as TournamentPostCategory)
+      ? (rawCategory as TournamentPostCategory)
+      : existing.category;
+
+    const imageUrls = Array.isArray(req.body?.imageUrls)
+      ? req.body.imageUrls.filter(u => typeof u === 'string' && u.startsWith('/uploads/'))
+      : existing.imageUrls;
+    const coverImageUrl = req.body?.coverImageUrl?.startsWith('/uploads/')
+      ? req.body.coverImageUrl
+      : imageUrls[0] ?? existing.coverImageUrl;
+
+    const post = await prisma.tournamentPost.update({
+      where: { id: existing.id },
+      data: {
+        category,
+        title,
+        body,
+        excerpt: excerptFrom(body, req.body?.excerpt),
+        coverImageUrl,
+        imageUrls,
+        pinned: req.body?.pinned === undefined ? existing.pinned : Boolean(req.body.pinned),
+      },
+      include: postInclude,
+    });
+    return reply.send(post);
+  });
+
+  app.delete<{ Params: { idOrSlug: string; postId: string } }>(
+    '/:idOrSlug/posts/:postId',
+    { onRequest: [app.authenticate] },
+    async (req, reply) => {
+      const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+      if (!tournament) return reply.status(404).send({ error: 'Not found' });
+      if (!(await requireTournamentEditor(req, reply, tournament.organizationId))) return;
+      const existing = await prisma.tournamentPost.findFirst({
+        where: { id: req.params.postId, tournamentId: tournament.id },
+      });
+      if (!existing) return reply.status(404).send({ error: 'Not found' });
+      await prisma.tournamentPost.delete({ where: { id: existing.id } });
+      return reply.status(204).send();
+    }
+  );
 
   app.post<{
     Body: {
@@ -163,17 +414,76 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       startDate: string;
       endDate: string;
       brandColor: string;
-      logoUrl: string;
-      backgroundImageUrl: string;
-      description: string;
+      logoUrl: string | null;
+      backgroundImageUrl: string | null;
+      description: string | null;
       hasPlayoffs: boolean;
-      qualifyingSpots: number;
+      qualifyingSpots: number | null;
     }>;
   }>('/:idOrSlug', { onRequest: [app.authenticate] }, async (req, reply) => {
     const existing = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
     if (!existing) return reply.status(404).send({ error: 'Not found' });
     if (!(await requireTournamentEditor(req, reply, existing.organizationId))) return;
-    const tournament = await prisma.tournament.update({ where: { id: existing.id }, data: req.body });
+
+    const body = req.body ?? {};
+    const data: {
+      name?: string;
+      sport?: string;
+      status?: TournamentStatusValue;
+      startDate?: Date;
+      endDate?: Date;
+      brandColor?: string | null;
+      logoUrl?: string | null;
+      backgroundImageUrl?: string | null;
+      description?: string | null;
+      hasPlayoffs?: boolean;
+      qualifyingSpots?: number | null;
+    } = {};
+
+    try {
+      if (body.name !== undefined) {
+        if (typeof body.name !== 'string' || !body.name.trim()) {
+          return reply.status(400).send({ error: 'name is required' });
+        }
+        data.name = body.name.trim();
+      }
+      if (typeof body.sport === 'string' && body.sport.trim()) data.sport = body.sport.trim();
+      const status = parseTournamentStatus(body.status);
+      if (status !== undefined) data.status = status;
+      const startDate = parseTournamentDate(body.startDate);
+      if (startDate !== undefined) data.startDate = startDate;
+      const endDate = parseTournamentDate(body.endDate);
+      if (endDate !== undefined) data.endDate = endDate;
+      if (body.brandColor !== undefined) {
+        const color = parseTeamColor(body.brandColor);
+        if (color !== undefined) data.brandColor = color;
+      }
+      if (body.logoUrl !== undefined) {
+        const logo = parseTournamentMediaUrl(body.logoUrl);
+        if (logo !== undefined) data.logoUrl = logo;
+      }
+      if (body.backgroundImageUrl !== undefined) {
+        const cover = parseTournamentMediaUrl(body.backgroundImageUrl);
+        if (cover !== undefined) data.backgroundImageUrl = cover;
+      }
+      if (body.description !== undefined) {
+        data.description = typeof body.description === 'string' ? (body.description.trim() || null) : null;
+      }
+      if (body.hasPlayoffs !== undefined) data.hasPlayoffs = Boolean(body.hasPlayoffs);
+      if (body.qualifyingSpots !== undefined) {
+        data.qualifyingSpots = body.qualifyingSpots === null ? null : Number(body.qualifyingSpots);
+      }
+    } catch (err) {
+      return sendParseError(reply, err);
+    }
+
+    const nextStart = data.startDate ?? existing.startDate;
+    const nextEnd = data.endDate ?? existing.endDate;
+    if (nextStart > nextEnd) {
+      return reply.status(400).send({ error: 'La fecha de inicio no puede ser posterior al fin' });
+    }
+
+    const tournament = await prisma.tournament.update({ where: { id: existing.id }, data });
     return reply.send(tournament);
   });
 
@@ -195,16 +505,258 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
   // ── Nested: Teams ────────────────────────────────────────────
   app.post<{
     Params: { idOrSlug: string };
-    Body: { name: string; shortName: string; color?: string; logoUrl?: string; groupId?: string };
+    Body: {
+      name: string;
+      shortName: string;
+      color?: string;
+      logoUrl?: string;
+      groupId?: string;
+      captainName?: string;
+      captainEmail?: string;
+      captainPhone?: string;
+    };
   }>('/:idOrSlug/teams', { onRequest: [app.authenticate] }, async (req, reply) => {
     const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
     if (!tournament) return reply.status(404).send({ error: 'Not found' });
     if (!(await requireTournamentEditor(req, reply, tournament.organizationId))) return;
+    const body = req.body ?? {};
+    const individual = isIndividualSport(tournament.sport);
+    const name = toTitleCase(String(body.name ?? ''));
+    if (!name) return reply.status(400).send({ error: individual ? 'El nombre del jugador es obligatorio' : 'El nombre del equipo es obligatorio' });
+
+    let shortName = String(body.shortName ?? '').trim().toUpperCase();
+    if (shortName && !/^[A-Z0-9]{2,4}$/.test(shortName)) {
+      return reply.status(400).send({ error: 'La abreviación debe tener 2–4 letras o números' });
+    }
+
+    let captain: Awaited<ReturnType<typeof parseCaptain>> = null;
+    try {
+      captain = await parseCaptain(
+        individual
+          ? {
+              captainName: body.captainName || name,
+              captainEmail: body.captainEmail,
+              captainPhone: body.captainPhone,
+            }
+          : body,
+        individual,
+      );
+      if (!shortName) {
+        shortName = individual
+          ? await uniqueTeamShortName(tournament.id, name)
+          : '';
+      }
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      return reply.status(e.statusCode ?? 400).send({ error: e.message });
+    }
+    if (!shortName) {
+      return reply.status(400).send({ error: 'La abreviación debe tener 2–4 letras o números' });
+    }
+
+    let individualColor: string | null = null;
+    if (individual && captain?.captainEmail) {
+      const player = await prisma.user.findUnique({
+        where: { email: captain.captainEmail },
+        include: { playerProfile: true },
+      });
+      const profileId = player?.playerProfile?.id;
+      if (profileId) {
+        const existing = await findEnrollmentInTournament(profileId, tournament.id);
+        if (existing?.isActive) {
+          return reply.status(409).send(sameTournamentConflict(existing.team));
+        }
+      }
+      const teamCount = await prisma.team.count({ where: { tournamentId: tournament.id } });
+      individualColor = player?.color?.trim() || teamColorForIndex(teamCount);
+    }
+
     const team = await prisma.team.create({
-      data: { ...req.body, tournamentId: tournament.id },
+      data: {
+        name,
+        shortName,
+        color: individual ? individualColor : (body.color?.trim() || null),
+        logoUrl: individual ? null : (body.logoUrl?.trim() || null),
+        groupId: body.groupId?.trim() || null,
+        tournamentId: tournament.id,
+        ...(captain ?? {}),
+      },
     });
-    return reply.status(201).send(team);
+
+    let created = team;
+    if (individual && captain) {
+      try {
+        const player = await ensurePlayerUser({
+          email: captain.captainEmail,
+          name: captain.captainName,
+          phone: captain.captainPhone,
+        });
+        const playerProfileId = player.playerProfile?.id;
+        if (playerProfileId) {
+          const prior = await findEnrollmentInTournament(playerProfileId, tournament.id);
+          if (prior && !prior.isActive) {
+            await prisma.playerEnrollment.update({
+              where: { id: prior.id },
+              data: { isActive: true, teamId: created.id },
+            });
+          } else if (!prior) {
+            await prisma.playerEnrollment.create({
+              data: {
+                playerProfileId,
+                teamId: created.id,
+                tournamentId: tournament.id,
+                isActive: true,
+              },
+            });
+          }
+        }
+        if (!created.captainUserId) {
+          created = await prisma.team.update({
+            where: { id: created.id },
+            data: { captainUserId: player.id },
+          });
+        }
+      } catch (err) {
+        await prisma.playerEnrollment.deleteMany({ where: { teamId: created.id } }).catch(() => undefined);
+        await prisma.team.delete({ where: { id: created.id } }).catch(() => undefined);
+        const e = err as Error & { statusCode?: number };
+        return reply.status(e.statusCode ?? 400).send({ error: e.message });
+      }
+    } else if (captain?.captainEmail) {
+      notifyCaptainAssigned({
+        teamId: created.id,
+        captainName: captain.captainName,
+        captainEmail: captain.captainEmail,
+      });
+    }
+    return reply.status(201).send(
+      individual ? (await withPlayerPhotos(tournament.sport, [created]))[0]! : created,
+    );
   });
+
+  function entryDto(team: { id: string; name: string; shortName: string }, enrollmentId: string) {
+    return { teamId: team.id, teamName: team.name, shortName: team.shortName, enrollmentId };
+  }
+
+  app.get<{ Params: { idOrSlug: string } }>(
+    '/:idOrSlug/entries/me',
+    { onRequest: [app.authenticate] },
+    async (req, reply) => {
+      const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+      if (!tournament) return reply.status(404).send({ error: 'Not found' });
+      const user = await prisma.user.findUnique({
+        where: { id: userIdFrom(req) },
+        include: { playerProfile: true },
+      });
+      const playerProfileId = user?.playerProfile?.id;
+      if (!playerProfileId) return reply.status(404).send({ error: 'Not found' });
+      const enrollment = await findEnrollmentInTournament(playerProfileId, tournament.id);
+      if (!enrollment || !enrollment.isActive) return reply.status(404).send({ error: 'Not found' });
+      return reply.send(entryDto(enrollment.team, enrollment.id));
+    },
+  );
+
+  /**
+   * Autoinscripción en deporte individual: crea un Team de una persona
+   * (nombre = jugador) y lo mete en la plantilla. El organizador sigue
+   * pudiendo cargar inscripciones desde Equipos.
+   */
+  app.post<{
+    Params: { idOrSlug: string };
+    Body: { color?: string; logoUrl?: string };
+  }>(
+    '/:idOrSlug/entries',
+    { onRequest: [app.authenticate] },
+    async (req, reply) => {
+      const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
+      if (!tournament) return reply.status(404).send({ error: 'Not found' });
+      if (!isIndividualSport(tournament.sport)) {
+        return reply.status(400).send({ error: 'Este torneo no admite inscripción individual' });
+      }
+      if (tournament.status === 'FINISHED') {
+        return reply.status(400).send({ error: 'Las inscripciones están cerradas' });
+      }
+
+      const actor = await prisma.user.findUnique({ where: { id: userIdFrom(req) } });
+      if (!actor) return reply.status(401).send({ error: 'Unauthorized' });
+
+      let player: Awaited<ReturnType<typeof ensurePlayerUser>>;
+      try {
+        player = await ensurePlayerUser({
+          email: actor.email,
+          name: actor.name,
+          phone: actor.phone,
+        });
+      } catch (err) {
+        const e = err as Error & { statusCode?: number };
+        return reply.status(e.statusCode ?? 400).send({ error: e.message });
+      }
+      const playerProfileId = player.playerProfile?.id;
+      if (!playerProfileId) {
+        return reply.status(500).send({ error: 'No se pudo crear el perfil de jugador' });
+      }
+
+      const existing = await findEnrollmentInTournament(playerProfileId, tournament.id);
+      if (existing) {
+        if (existing.isActive) {
+          return reply.status(409).send({
+            error: 'Ya estás inscrito en este torneo',
+            ...entryDto(existing.team, existing.id),
+          });
+        }
+        const reactivated = await prisma.playerEnrollment.update({
+          where: { id: existing.id },
+          data: { isActive: true },
+        });
+        return reply.send(entryDto(existing.team, reactivated.id));
+      }
+
+      const name = toTitleCase(player.name);
+      const [shortName, teamCount] = await Promise.all([
+        uniqueTeamShortName(tournament.id, name),
+        prisma.team.count({ where: { tournamentId: tournament.id } }),
+      ]);
+
+      try {
+        const created = await prisma.$transaction(async (tx) => {
+          const team = await tx.team.create({
+            data: {
+              name,
+              shortName,
+              color: actor.color?.trim() || teamColorForIndex(teamCount),
+              tournamentId: tournament.id,
+              captainName: name,
+              captainEmail: player.email.trim().toLowerCase(),
+              captainPhone: player.phone?.trim() || null,
+              captainUserId: player.id,
+            },
+          });
+          const enrollment = await tx.playerEnrollment.create({
+            data: {
+              playerProfileId,
+              teamId: team.id,
+              tournamentId: tournament.id,
+              isActive: true,
+            },
+          });
+          return { team, enrollment };
+        });
+        return reply.status(201).send(entryDto(created.team, created.enrollment.id));
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === 'P2002') {
+          const conflict = await findEnrollmentInTournament(playerProfileId, tournament.id);
+          if (conflict) {
+            return reply.status(409).send({
+              error: 'Ya estás inscrito en este torneo',
+              ...entryDto(conflict.team, conflict.id),
+            });
+          }
+        }
+        throw err;
+      }
+    },
+  );
 
   app.get<{ Params: { idOrSlug: string } }>('/:idOrSlug/teams', async (req, reply) => {
     const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
@@ -245,6 +797,7 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       scheduledAt?: string;
       venue?: string;
       stage?: string;
+      refereeId?: string;
     };
   }>('/:idOrSlug/matches', { onRequest: [app.authenticate] }, async (req, reply) => {
     const tournament = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
@@ -253,10 +806,34 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
     if (req.body.homeTeamId === req.body.awayTeamId) {
       return reply.status(400).send({ error: 'homeTeamId and awayTeamId must differ' });
     }
-    const match = await prisma.match.create({
-      data: { ...req.body, tournamentId: tournament.id, status: 'SCHEDULED' },
-      include: { homeTeam: true, awayTeam: true },
+    const teamIds = [req.body.homeTeamId, req.body.awayTeamId];
+    const teams = await prisma.team.count({
+      where: { tournamentId: tournament.id, id: { in: teamIds } },
     });
+    if (teams !== 2) {
+      return reply.status(400).send({ error: 'Both teams must belong to this tournament' });
+    }
+    const refereeId = req.body.refereeId?.trim() || undefined;
+    if (refereeId) {
+      const referee = await prisma.user.findFirst({ where: { id: refereeId, role: 'REFEREE' } });
+      if (!referee) return reply.status(400).send({ error: 'refereeId is not a referee' });
+    }
+    const scheduledAt = req.body.scheduledAt ? new Date(req.body.scheduledAt) : undefined;
+    const match = await prisma.match.create({
+      data: {
+        tournamentId: tournament.id,
+        homeTeamId: req.body.homeTeamId,
+        awayTeamId: req.body.awayTeamId,
+        status: 'SCHEDULED',
+        scheduledAt,
+        kickoffRemindedAt: scheduledAt ? kickoffRemindedValue(scheduledAt) : undefined,
+        venue: req.body.venue?.trim() || undefined,
+        stage: req.body.stage?.trim() || undefined,
+        refereeId,
+      },
+      include: { homeTeam: true, awayTeam: true, referee: { select: { id: true, name: true } } },
+    });
+    if (scheduledAt) notifyMatchKickoff(match.id, 'scheduled');
     return reply.status(201).send(match);
   });
 
@@ -284,14 +861,15 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!tournament) return reply.status(404).send({ error: 'Not found' });
 
-    const groupBuckets = tournament.groups.length > 0
-      ? tournament.groups.map(g => ({ id: g.id, label: g.label, teams: g.teams }))
-      : [{ id: 'all', label: 'Tabla de posiciones', teams: tournament.teams }];
+    const looked = await withTournamentLooks(tournament);
+    const groupBuckets = looked.groups.length > 0
+      ? looked.groups.map(g => ({ id: g.id, label: g.label, teams: g.teams }))
+      : [{ id: 'all', label: 'Tabla de posiciones', teams: looked.teams }];
 
     const groups = groupBuckets.map(g => ({
       id: g.id,
       label: g.label,
-      standings: computeStandings(g.teams, tournament.matches),
+      standings: computeStandings(g.teams, looked.matches),
     }));
 
     const response: {

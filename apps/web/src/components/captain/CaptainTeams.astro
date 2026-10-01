@@ -1,0 +1,443 @@
+---
+/**
+ * Equipos del capitán: escudo y plantilla. El organizador sigue
+ * viendo y editando lo mismo en el dashboard de Equipos.
+ */
+import type { CaptainedTeam, TeamEnrollment } from '../../lib/api';
+import { toTitleCase } from '@parches/utils';
+import { mediaUrl } from '../../lib/media';
+
+interface Props {
+  teams: CaptainedTeam[];
+  rosterByTeam?: Record<string, TeamEnrollment[]>;
+  error?: string | null;
+  saved?: boolean;
+}
+
+const { teams, rosterByTeam = {}, error = null, saved = false } = Astro.props;
+const openByDefault = teams.length === 1;
+
+function hexColor(team: CaptainedTeam): string {
+  const raw = (team.color ?? '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw;
+  if (/^[0-9A-Fa-f]{6}$/.test(raw)) return `#${raw}`;
+  return '#00e5ff';
+}
+
+const sportLabel: Record<string, string> = {
+  football: 'Fútbol',
+  basketball: 'Básquet',
+  volleyball: 'Vóleibol',
+  tennis: 'Tenis',
+};
+---
+
+<div class="ops">
+  {saved && !error && (
+    <p class="ops-ok" role="status">Guardado.</p>
+  )}
+  {error && (
+    <p class="ops-err" role="alert">{error}</p>
+  )}
+
+  {teams.length === 0 && (
+    <p class="ops-empty">No capitanas ningún equipo todavía. El organizador te asigna con tu correo.</p>
+  )}
+
+  {teams.map(team => {
+    const color = hexColor(team);
+    const roster = rosterByTeam[team.id] ?? [];
+    const activeCount = roster.filter(p => p.isActive).length;
+    const sport = sportLabel[team.tournament.sport] ?? team.tournament.sport;
+    return (
+      <div class="ops-block" id={`tm-${team.id}`}>
+        <form method="POST" enctype="multipart/form-data" class="ops-row">
+          <input type="hidden" name="intent" value="updateCrest" />
+          <input type="hidden" name="teamId" value={team.id} />
+
+          <div class="ops-row__top">
+            <label class="tm-mark" style={`--tm-color: ${color}`}>
+              {team.logoUrl ? (
+                <img src={mediaUrl(team.logoUrl)} alt="" class="tm-mark__img" />
+              ) : (
+                <span>{team.shortName}</span>
+              )}
+              <input type="file" name="logo" class="tm-file"
+                accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                aria-label={`Escudo de ${team.name}`} />
+            </label>
+            <div class="ops-row__teams">
+              <span class="ops-row__home">{toTitleCase(team.name)}</span>
+              <span class="ops-row__names">
+                {sport} · {team.tournament.name}
+                {team.tournament.organization?.name ? ` · ${team.tournament.organization.name}` : ''}
+              </span>
+            </div>
+            <a href={`/teams/${team.id}`} class="tm-link">Ficha</a>
+          </div>
+
+          <div class="ops-row__foot">
+            {team.logoUrl && (
+              <label class="tm-clear">
+                <input type="checkbox" name="clearLogo" value="1" />
+                Quitar escudo
+              </label>
+            )}
+            <button type="submit" class="btn-accent" style="padding: 8px 14px; font-size: 0.75rem;">
+              Guardar escudo
+            </button>
+          </div>
+        </form>
+
+        <details class="tm-squad" open={openByDefault}>
+          <summary class="tm-squad__summary">
+            <span>Plantilla</span>
+            <span class="tm-squad__count">
+              {activeCount} {activeCount === 1 ? 'jugador' : 'jugadores'}
+              {roster.length > activeCount ? ` · ${roster.length - activeCount} baja${roster.length - activeCount === 1 ? '' : 's'}` : ''}
+            </span>
+          </summary>
+          <div class="tm-squad__body">
+            {roster.length === 0 && (
+              <p class="tm-squad__empty">Aún no hay inscritos. Agrega el primero con su correo.</p>
+            )}
+
+            {roster.map(row => (
+              <div
+                class:list={['tm-player', !row.isActive && 'tm-player--off']}
+                id={`pl-${row.id}`}
+              >
+                <form method="POST" class="tm-player__form">
+                  <input type="hidden" name="intent" value="updatePlayer" />
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <input type="hidden" name="enrollmentId" value={row.id} />
+                  <label class="ops-field tm-player__num">
+                    <span class="label">#</span>
+                    <input type="number" name="jerseyNumber" min="0" max="99"
+                      value={row.jerseyNumber ?? ''} class="ops-input" />
+                  </label>
+                  <label class="ops-field">
+                    <span class="label">Nombre</span>
+                    <input type="text" name="name" required value={row.player.name}
+                      class="ops-input" autocomplete="name" />
+                  </label>
+                  <label class="ops-field tm-player__mail">
+                    <span class="label">Correo</span>
+                    <input type="email" value={row.player.email} class="ops-input" readonly tabindex="-1" />
+                  </label>
+                  <label class="ops-field">
+                    <span class="label">Posición</span>
+                    <input type="text" name="position" value={row.position ?? ''}
+                      class="ops-input" autocomplete="off" />
+                  </label>
+                  <label class="ops-field">
+                    <span class="label">Celular</span>
+                    <input type="tel" name="phone" value={row.player.phone ?? ''}
+                      class="ops-input" autocomplete="tel" />
+                  </label>
+                  <div class="tm-player__actions">
+                    {!row.isActive && <span class="tm-player__badge">Baja</span>}
+                    <button type="submit" class="btn-accent tm-player__btn">Guardar</button>
+                  </div>
+                </form>
+                {row.isActive ? (
+                  <form method="POST" class="tm-player__drop">
+                    <input type="hidden" name="intent" value="removePlayer" />
+                    <input type="hidden" name="teamId" value={team.id} />
+                    <input type="hidden" name="enrollmentId" value={row.id} />
+                    <button
+                      type="submit"
+                      class="btn-ghost tm-player__btn"
+                      onclick="return confirm('¿Dar de baja a este jugador?')"
+                    >
+                      Baja
+                    </button>
+                  </form>
+                ) : (
+                  <form method="POST" class="tm-player__drop">
+                    <input type="hidden" name="intent" value="reactivatePlayer" />
+                    <input type="hidden" name="teamId" value={team.id} />
+                    <input type="hidden" name="email" value={row.player.email} />
+                    <input type="hidden" name="jerseyNumber" value={row.jerseyNumber ?? ''} />
+                    <input type="hidden" name="position" value={row.position ?? ''} />
+                    <button type="submit" class="btn-ghost tm-player__btn">Reactivar</button>
+                  </form>
+                )}
+              </div>
+            ))}
+
+            <form method="POST" class="tm-add">
+              <input type="hidden" name="intent" value="enroll" />
+              <input type="hidden" name="teamId" value={team.id} />
+              <label class="ops-field tm-add__mail">
+                <span class="label">Correo</span>
+                <input type="email" name="email" required placeholder="jugador@correo.com"
+                  class="ops-input" autocomplete="email" />
+              </label>
+              <label class="ops-field">
+                <span class="label">Nombre</span>
+                <input type="text" name="name" placeholder="Si es nuevo"
+                  class="ops-input" autocomplete="name" />
+              </label>
+              <label class="ops-field tm-player__num">
+                <span class="label">#</span>
+                <input type="number" name="jerseyNumber" min="0" max="99" class="ops-input" />
+              </label>
+              <label class="ops-field">
+                <span class="label">Posición</span>
+                <input type="text" name="position" class="ops-input" autocomplete="off" />
+              </label>
+              <label class="ops-field">
+                <span class="label">Celular</span>
+                <input type="tel" name="phone" class="ops-input" autocomplete="tel" />
+              </label>
+              <button type="submit" class="btn-accent tm-add__btn">Inscribir</button>
+            </form>
+          </div>
+        </details>
+      </div>
+    );
+  })}
+</div>
+
+<style>
+.ops-ok {
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.35);
+  color: #86efac;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+}
+.ops-err {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+}
+.ops-empty { color: var(--text-secondary); margin: 0; }
+.ops-block {
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ops-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.ops-row__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ops-row__teams { flex: 1; min-width: 0; }
+.ops-row__home {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.ops-row__names {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.ops-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ops-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+}
+.ops-input:focus { border-color: var(--accent); }
+.tm-mark {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--tm-color) 22%, var(--bg-overlay));
+  color: var(--tm-color);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--tm-color) 45%, var(--border));
+}
+.tm-mark:hover { border-style: solid; }
+.tm-mark__img { width: 100%; height: 100%; object-fit: contain; }
+.tm-file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.tm-clear {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tm-link {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.ops-row__foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.tm-squad { border-top: 1px solid var(--border); }
+.tm-squad__summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  user-select: none;
+}
+.tm-squad__summary::-webkit-details-marker { display: none; }
+.tm-squad__summary::marker { content: ''; }
+.tm-squad__summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.tm-squad[open] > .tm-squad__summary::after {
+  transform: rotate(225deg);
+  margin-top: 4px;
+}
+.tm-squad__count { font-weight: 600; margin-right: auto; }
+.tm-squad__body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tm-squad__empty { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+.tm-player {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.tm-player--off { opacity: 0.62; }
+.tm-player__form {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1.1fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.9fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.tm-player__num { width: 56px; }
+.tm-player__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+.tm-player__badge {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.tm-player__drop { flex-shrink: 0; padding-bottom: 2px; }
+.tm-player__btn { padding: 8px 12px; font-size: 0.72rem; }
+.tm-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) 56px minmax(0, 0.9fr) minmax(0, 0.9fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.tm-add__btn { padding: 8px 14px; font-size: 0.75rem; }
+
+@media (max-width: 1100px) {
+  .tm-player { flex-direction: column; align-items: stretch; }
+  .tm-player__form,
+  .tm-add { grid-template-columns: 1fr 1fr; }
+  .tm-player__num { width: auto; }
+  .tm-player__mail,
+  .tm-add__mail,
+  .tm-player__actions,
+  .tm-add__btn { grid-column: 1 / -1; }
+}
+</style>
+
+<script>
+  const hash = window.location.hash;
+  if (hash) {
+    const el = document.querySelector(hash);
+    if (el) {
+      const details =
+        el instanceof HTMLDetailsElement
+          ? el
+          : el.closest('details') ?? el.querySelector('details');
+      if (details instanceof HTMLDetailsElement) details.open = true;
+    }
+  }
+
+  document.querySelectorAll<HTMLInputElement>('.tm-file').forEach(input => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const mark = input.closest('.tm-mark');
+      if (!mark) return;
+      let img = mark.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 'tm-mark__img';
+        img.alt = '';
+        mark.querySelector('span')?.replaceWith(img);
+        if (!mark.contains(img)) mark.prepend(img);
+      }
+      img.src = URL.createObjectURL(file);
+    });
+  });
+</script>

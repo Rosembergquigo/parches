@@ -1,0 +1,36 @@
+---
+/**
+ * Hub de organizador: empresas. Los torneos se listan en /orgs/[slug].
+ */
+import Base from '../../layouts/Base.astro';
+import ProfileShell from '../../layouts/ProfileShell.astro';
+import ProfileHeader from '../../components/user/ProfileHeader.astro';
+import OrganizationsPanel from '../../components/user/OrganizationsPanel.astro';
+import { requireAuth } from '../../lib/auth';
+import { getUserProfile, getMyOrganizations } from '../../lib/api';
+import { canOrganize } from '../../lib/session';
+import { MOCK_USER_VIEWER } from '../../data/mock';
+
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
+
+const organizations = await getMyOrganizations(Astro.request);
+if (!canOrganize(auth, organizations)) return Astro.redirect('/profile');
+
+const fetched = await getUserProfile(auth.id, Astro.request);
+const headerRole = auth.role === 'ADMIN' ? 'ADMIN' : 'ORGANIZER';
+const organizerUser = {
+  ...(fetched ?? MOCK_USER_VIEWER),
+  id: auth.id,
+  name: auth.name,
+  email: auth.email,
+  role: headerRole,
+};
+---
+
+<Base title={`Organizador · ${auth.name} | Chapi`} description="Administra tus empresas y torneos" noIndex={true}>
+  <ProfileHeader user={organizerUser} isOwn={true} />
+  <ProfileShell>
+    <OrganizationsPanel organizations={organizations} />
+  </ProfileShell>
+</Base>

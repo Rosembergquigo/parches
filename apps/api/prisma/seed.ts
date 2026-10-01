@@ -13,8 +13,8 @@
  *  3. "Liga de Basquetbol (seed)" — basket, sin grupos, con jugadores demo
  *     para sus 3 tabs de stats (Anotadores / Reboteadores / Asistencias).
  *
- * Y usuarios demo para probar los perfiles (login simplificado, solo
- * por email — ver apps/api/src/routes/auth.ts):
+ * Y usuarios demo para probar los perfiles (email + clave
+ * `parches-demo` — ver apps/api/src/routes/auth.ts):
  *  - Organizador: OWNER de la empresa "Parches Demo", que es dueña de
  *    los tres torneos seed. User.role sigue siendo VIEWER — organizar
  *    es membresía, no un rol de usuario.
@@ -35,8 +35,11 @@
  * Uso: pnpm --filter @parches/api db:seed
  */
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../src/lib/password.js';
 
 const prisma = new PrismaClient();
+const DEMO_PASSWORD = 'parches-demo';
+const DEMO_PASSWORD_HASH = await hashPassword(DEMO_PASSWORD);
 
 const VOLEIBOL_NAME = 'Sudamericano de Vóleibol (seed)';
 const VOLEIBOL_SLUG = 'sudamericano-voleibol-seed';
@@ -88,6 +91,50 @@ interface TeamSeed {
   name: string;
   shortName: string;
   color: string;
+}
+
+let demoPhoneSeq = 0;
+function demoPhone(): string {
+  demoPhoneSeq += 1;
+  return `+57 300 555 ${String(1000 + demoPhoneSeq).slice(-4)}`;
+}
+
+let captainSeq = 0;
+function captainContact(t: { name: string; shortName: string }) {
+  captainSeq += 1;
+  return {
+    captainName: `Capitán ${t.shortName}`,
+    captainEmail: `capitan.${t.shortName.toLowerCase()}@parches.app`,
+    captainPhone: `+57 310 555 ${String(2000 + captainSeq).slice(-4)}`,
+  };
+}
+
+/** Si el equipo ya tiene plantilla, el primer inscrito queda como capitán enlazado. */
+async function assignCaptainsFromRoster(tournamentId: string) {
+  const teams = await prisma.team.findMany({
+    where: { tournamentId },
+    include: {
+      enrollments: {
+        where: { isActive: true },
+        orderBy: { joinedAt: 'asc' },
+        take: 1,
+        include: { playerProfile: { include: { user: true } } },
+      },
+    },
+  });
+  for (const team of teams) {
+    const user = team.enrollments[0]?.playerProfile.user;
+    if (!user) continue;
+    await prisma.team.update({
+      where: { id: team.id },
+      data: {
+        captainName: user.name,
+        captainEmail: user.email,
+        captainPhone: user.phone ?? team.captainPhone,
+        captainUserId: user.id,
+      },
+    });
+  }
 }
 
 const GROUP_A: TeamSeed[] = [
@@ -162,6 +209,7 @@ async function seedVoleibol(organizationId: string) {
             color: t.color,
             tournamentId: tournament.id,
             groupId: group.id,
+            ...captainContact(t),
           },
         })
       )
@@ -227,8 +275,10 @@ async function seedDemoVolleyballScorers(
     await prisma.user.create({
       data: {
         email: s.email,
+        passwordHash: DEMO_PASSWORD_HASH,
         name: s.name,
         role: 'PLAYER',
+        phone: demoPhone(),
         playerProfile: {
           create: {
             enrollments: {
@@ -305,7 +355,7 @@ async function seedLiga(organizationId: string) {
   const teams = await Promise.all(
     LIGA_TEAMS.map(t =>
       prisma.team.create({
-        data: { name: t.name, shortName: t.shortName, color: t.color, tournamentId: tournament.id },
+        data: { name: t.name, shortName: t.shortName, color: t.color, tournamentId: tournament.id, ...captainContact(t) },
       })
     )
   );
@@ -394,7 +444,7 @@ async function seedBasketball(organizationId: string) {
   const teams = await Promise.all(
     BASKET_TEAMS.map(t =>
       prisma.team.create({
-        data: { name: t.name, shortName: t.shortName, color: t.color, tournamentId: tournament.id },
+        data: { name: t.name, shortName: t.shortName, color: t.color, tournamentId: tournament.id, ...captainContact(t) },
       })
     )
   );
@@ -457,8 +507,10 @@ async function seedDemoBasketballScorers(teams: { id: string; name: string }[], 
     await prisma.user.create({
       data: {
         email: s.email,
+        passwordHash: DEMO_PASSWORD_HASH,
         name: s.name,
         role: 'PLAYER',
+        phone: demoPhone(),
         playerProfile: {
           create: {
             nationality: 'COL',
@@ -493,7 +545,7 @@ const REFEREE_EMAIL = 'arbitro.demo@parches.app';
 async function wipeUserByEmail(email: string) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (!existing) return;
-  // Cascada: User -> PlayerProfile -> PlayerEnrollment -> PlayerTournamentStat.
+  await prisma.tournamentPost.deleteMany({ where: { authorId: existing.id } });
   await prisma.user.delete({ where: { id: existing.id } });
 }
 
@@ -504,9 +556,11 @@ async function seedDemoPlayer(team: { id: string; name: string }, tournamentId: 
   const user = await prisma.user.create({
     data: {
       email: PLAYER_EMAIL,
+      passwordHash: DEMO_PASSWORD_HASH,
       name: 'Danilo Torres',
       role: 'PLAYER',
-      bio: 'Delantero. Juego fútbol desde los 8 años.',
+      phone: demoPhone(),
+      bio: 'Delantero. Juego fútbol y básquet en torneos distintos.',
       playerProfile: {
         create: {
           nationality: 'COL',
@@ -535,6 +589,36 @@ async function seedDemoPlayer(team: { id: string; name: string }, tournamentId: 
 
   console.log(`✅ Jugador demo: ${user.name} (${user.email}) — enrolado en ${team.name}`);
   return user;
+}
+
+/**
+ * El mismo jugador (mismo correo) en un segundo torneo de otro deporte.
+ * Demuestra la regla: un equipo por torneo, varios torneos a la vez.
+ */
+async function enrollDemoPlayerInOtherSport(
+  user: { id: string; email: string; name: string },
+  team: { id: string; name: string },
+  tournamentId: string
+) {
+  const profile = await prisma.playerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) return;
+  await prisma.playerEnrollment.create({
+    data: {
+      playerProfileId: profile.id,
+      teamId: team.id,
+      tournamentId,
+      jerseyNumber: 11,
+      position: 'Escolta',
+      isActive: true,
+      tournamentStats: {
+        create: {
+          matchesPlayed: 3,
+          stats: { points: 8, rebounds: 2, assists: 3, steals: 1, blocks: 0 },
+        },
+      },
+    },
+  });
+  console.log(`✅ ${user.name} (${user.email}) también en ${team.name} — otro deporte`);
 }
 
 interface ScorerSeed {
@@ -566,8 +650,10 @@ async function seedDemoScorers(teams: { id: string; name: string }[], tournament
     await prisma.user.create({
       data: {
         email: s.email,
+        passwordHash: DEMO_PASSWORD_HASH,
         name: s.name,
         role: 'PLAYER',
+        phone: demoPhone(),
         playerProfile: {
           create: {
             nationality: 'COL',
@@ -601,8 +687,10 @@ async function seedDemoReferee(matches: { id: string; status: string }[]) {
   const user = await prisma.user.create({
     data: {
       email: REFEREE_EMAIL,
+      passwordHash: DEMO_PASSWORD_HASH,
       name: 'Jorge Ospina',
       role: 'REFEREE',
+      phone: demoPhone(),
       bio: 'Árbitro certificado. Liga de Prueba y torneos amateur.',
     },
   });
@@ -638,8 +726,10 @@ async function seedDemoOrganizer(organizationId: string) {
   const user = await prisma.user.create({
     data: {
       email: ORGANIZER_EMAIL,
+      passwordHash: DEMO_PASSWORD_HASH,
       name: 'Laura Méndez',
       role: 'VIEWER',
+      phone: demoPhone(),
       bio: 'Organizo ligas amateur en Bogotá.',
       memberships: {
         create: { organizationId, role: 'OWNER' },
@@ -660,6 +750,10 @@ const demoPlayer = await seedDemoPlayer(liga.teams[0]!, liga.id);
 await seedDemoScorers(liga.teams, liga.id);
 await seedDemoVolleyballScorers(voleibol.teamsByKey, voleibol.id);
 await seedDemoBasketballScorers(basket.teams, basket.id);
+await enrollDemoPlayerInOtherSport(demoPlayer, basket.teams[0]!, basket.id);
+await assignCaptainsFromRoster(liga.id);
+await assignCaptainsFromRoster(voleibol.id);
+await assignCaptainsFromRoster(basket.id);
 const demoReferee = await seedDemoReferee(liga.matches);
 const demoOrganizer = await seedDemoOrganizer(demoOrg.id);
 
@@ -671,7 +765,8 @@ console.log(`  curl http://localhost:3000/api/tournaments/${liga.id}/standings |
 console.log(`  curl http://localhost:3000/api/tournaments/${liga.id}/player-stats | jq`);
 console.log(`  curl http://localhost:3000/api/tournaments/${basket.id}/player-stats | jq`);
 console.log(`  curl http://localhost:3000/api/organizations/${demoOrg.slug} | jq`);
-console.log('\nUsuarios demo (login solo con email, sin password — POST /api/auth/login):');
+console.log('\nUsuarios demo (POST /api/auth/login con email + clave):');
+console.log(`  Clave:       ${DEMO_PASSWORD}`);
 console.log(`  Organizador: ${demoOrganizer.email}  → GET /api/organizations/me`);
 console.log(`  Jugador:     ${demoPlayer.email}  → GET /api/users/${demoPlayer.id}`);
 console.log(`  Árbitro:     ${demoReferee.email}  → GET /api/users/${demoReferee.id}`);

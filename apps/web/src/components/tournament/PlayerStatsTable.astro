@@ -98,15 +98,16 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
                 <td class="col-player">
                   {row.userId ? (
                     <a href={`/users/${row.userId}`} class="player-cell player-cell--link" aria-label={`Ver perfil de ${row.playerName}`}>
+                      {row.playerAvatarUrl ? (
+                        <img src={row.playerAvatarUrl} alt="" class="player-avatar player-avatar--img" />
+                      ) : (
                       <div
                         class="player-avatar"
                         aria-hidden="true"
-                        style={row.position <= 3
-                          ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
-                          : ''}
                       >
                         {row.playerShortName}
                       </div>
+                      )}
                       <div class="player-info">
                         <span class="player-name player-name--link">{row.playerName}</span>
                         {row.statLabel && (
@@ -116,15 +117,16 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
                     </a>
                   ) : (
                     <div class="player-cell">
+                      {row.playerAvatarUrl ? (
+                        <img src={row.playerAvatarUrl} alt="" class="player-avatar player-avatar--img" />
+                      ) : (
                       <div
                         class="player-avatar"
                         aria-hidden="true"
-                        style={row.position <= 3
-                          ? `background: ${activeBg}; border-color: ${activeBorder}; color: ${activeColor};`
-                          : ''}
                       >
                         {row.playerShortName}
                       </div>
+                      )}
                       <div class="player-info">
                         <span class="player-name">{row.playerName}</span>
                         {row.statLabel && (
@@ -173,7 +175,6 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
   font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-primary);
   margin-bottom: 14px;
 }
@@ -190,7 +191,6 @@ const uid = `pst-${Math.random().toString(36).slice(2, 7)}`;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
@@ -244,7 +244,6 @@ thead th {
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
   padding: 10px 12px;
   white-space: nowrap;
@@ -317,6 +316,10 @@ thead .col-stat  { text-align: center; }
   letter-spacing: 0;
   flex-shrink: 0;
 }
+.player-avatar--img {
+  object-fit: cover;
+  padding: 0;
+}
 .player-info {
   display: flex;
   flex-direction: column;
@@ -327,7 +330,6 @@ thead .col-stat  { text-align: center; }
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--text-primary);
   white-space: nowrap;
   transition: color var(--transition);
@@ -338,7 +340,6 @@ thead .col-stat  { text-align: center; }
   font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -369,7 +370,6 @@ thead .col-stat  { text-align: center; }
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   white-space: nowrap;
 }

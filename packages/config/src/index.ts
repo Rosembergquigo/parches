@@ -7,6 +7,7 @@ export const PORTS = {
 
 export const ENDPOINTS = {
   API_HTTP: process.env.API_URL ?? `http://localhost:${PORTS.API}`,
+  WEB_HTTP: process.env.WEB_URL ?? `http://localhost:${PORTS.WEB}`,
   STREAMING_DATA_WS: process.env.STREAMING_DATA_WS_URL ?? `ws://localhost:${PORTS.STREAMING_DATA}`,
   STREAMING_DATA_HTTP: process.env.STREAMING_DATA_URL ?? `http://localhost:${PORTS.STREAMING_DATA}`,
   STREAMING_VIDEO_HTTP: process.env.STREAMING_VIDEO_URL ?? `http://localhost:${PORTS.STREAMING_VIDEO}`,
@@ -22,3 +23,10 @@ export const SPORTS_CONFIG = {
     hockey:     { count: 3, label: 'Period' },
   },
 } as const;
+
+/** Singles: cada inscripción es un Team de una persona. Padel y similares se suman aquí. */
+export const INDIVIDUAL_SPORTS = ['tennis'] as const;
+
+export function isIndividualSport(sport: string): boolean {
+  return (INDIVIDUAL_SPORTS as readonly string[]).includes(sport);
+}

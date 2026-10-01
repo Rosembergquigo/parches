@@ -1,0 +1,321 @@
+---
+/**
+ * Operar partidos de un torneo: jornada, fecha, sede, árbitro y estado.
+ * El marcador es solo lectura. Se usa dentro del dash-body.
+ */
+import type { RawMatch, RawTournament } from '../../lib/adapters';
+import type { RefereeOption } from '../../lib/api';
+import { toTitleCase } from '@parches/utils';
+import VenueSelect from '../venue/VenueSelect.astro';
+import RefereeSelect from './RefereeSelect.astro';
+
+interface Props {
+  tournament: RawTournament;
+  referees?: RefereeOption[];
+  error?: string | null;
+  saved?: boolean;
+  fixtureHref: string;
+}
+
+const { tournament, referees = [], error = null, saved = false, fixtureHref } = Astro.props;
+
+function toDatetimeLocal(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+const matches = [...(tournament.matches ?? [])].sort((a, b) => {
+  const sa = a.scheduledAt ?? '';
+  const sb = b.scheduledAt ?? '';
+  if (sa !== sb) return sa.localeCompare(sb);
+  return (a.stage ?? '').localeCompare(b.stage ?? '');
+});
+
+const stages = new Map<string, RawMatch[]>();
+for (const m of matches) {
+  const label = m.stage?.trim() || 'Sin jornada';
+  const list = stages.get(label) ?? [];
+  list.push(m);
+  stages.set(label, list);
+}
+
+const teams = [...(tournament.teams ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+---
+
+<div class="ops">
+  {saved && !error && (
+    <p class="ops-ok" role="status">Guardado.</p>
+  )}
+  {error && (
+    <p class="ops-err" role="alert">{error}</p>
+  )}
+
+  {matches.length === 0 && (
+    <p class="ops-empty">
+      Este torneo no tiene partidos.
+      <a href={fixtureHref}>Genera el todos-contra-todos</a>
+      o agrega uno abajo.
+    </p>
+  )}
+
+  {[...stages.entries()].map(([label, list]) => (
+    <section class="ops-stage">
+      <h3 class="ops-stage__title">{label}</h3>
+      <div class="ops-table">
+        {list.map(m => (
+          <div class="ops-block" id={`m-${m.id}`}>
+            <form method="POST" class="ops-row">
+              <input type="hidden" name="intent" value="update" />
+              <input type="hidden" name="matchId" value={m.id} />
+
+              <div class="ops-row__top">
+                <div class="ops-row__teams">
+                  <span class="ops-row__home">{m.homeTeam.shortName}</span>
+                  <span class="label ops-row__score">
+                    {m.status === 'SCHEDULED' && m.homeScore === 0 && m.awayScore === 0
+                      ? 'vs'
+                      : `${m.homeScore} — ${m.awayScore}`}
+                  </span>
+                  <span class="ops-row__away">{m.awayTeam.shortName}</span>
+                  <span class="ops-row__names">{toTitleCase(m.homeTeam.name)} — {toTitleCase(m.awayTeam.name)}</span>
+                </div>
+
+                <label class="ops-field ops-field--status">
+                  <span class="label">Estado</span>
+                  <select name="status" class="ops-input">
+                    <option value="SCHEDULED" selected={m.status === 'SCHEDULED'}>Programado</option>
+                    <option value="LIVE" selected={m.status === 'LIVE'}>En vivo</option>
+                    {m.status === 'HALFTIME' && (
+                      <option value="HALFTIME" selected>Medio tiempo</option>
+                    )}
+                    <option value="FINISHED" selected={m.status === 'FINISHED'}>Finalizado</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="ops-row__bottom">
+                <label class="ops-field">
+                  <span class="label">Jornada</span>
+                  <input type="text" name="stage" value={m.stage ?? ''} class="ops-input" />
+                </label>
+                <label class="ops-field">
+                  <span class="label">Fecha</span>
+                  <input type="datetime-local" name="scheduledAt"
+                    value={toDatetimeLocal(m.scheduledAt)} class="ops-input" />
+                </label>
+                <label class="ops-field ops-field--venue">
+                  <span class="label">Sede</span>
+                  <VenueSelect
+                    sport={tournament.sport}
+                    value={m.venue}
+                    emptyLabel="Sin sede"
+                  />
+                </label>
+                <label class="ops-field ops-field--ref">
+                  <span class="label">Árbitro</span>
+                  <RefereeSelect
+                    referees={referees}
+                    value={m.refereeId ?? m.referee?.id}
+                    extra={m.referee ?? null}
+                  />
+                </label>
+              </div>
+
+              <div class="ops-row__foot">
+                <button type="submit" class="btn-accent" style="padding: 8px 14px; font-size: 0.75rem;">
+                  Guardar
+                </button>
+                <button
+                  type="submit"
+                  form={`del-${m.id}`}
+                  class="btn-ghost"
+                  style="padding: 8px 12px; font-size: 0.75rem;"
+                  onclick="return confirm('¿Borrar este partido?')"
+                >
+                  Borrar
+                </button>
+              </div>
+            </form>
+            <form id={`del-${m.id}`} method="POST" hidden>
+              <input type="hidden" name="intent" value="delete" />
+              <input type="hidden" name="matchId" value={m.id} />
+            </form>
+          </div>
+        ))}
+      </div>
+    </section>
+  ))}
+
+  {teams.length >= 2 && (
+    <section class="ops-stage">
+      <h3 class="ops-stage__title">Agregar partido</h3>
+      <form method="POST" class="ops-add">
+        <input type="hidden" name="intent" value="create" />
+        <label class="ops-field">
+          <span class="label">Local</span>
+          <select name="homeTeamId" required class="ops-input">
+            {teams.map(t => (
+              <option value={t.id}>{toTitleCase(t.name)}</option>
+            ))}
+          </select>
+        </label>
+        <label class="ops-field">
+          <span class="label">Visita</span>
+          <select name="awayTeamId" required class="ops-input">
+            {teams.map((t, i) => (
+              <option value={t.id} selected={i === 1}>{toTitleCase(t.name)}</option>
+            ))}
+          </select>
+        </label>
+        <label class="ops-field">
+          <span class="label">Jornada</span>
+          <input type="text" name="stage" class="ops-input" placeholder="Jornada 4" />
+        </label>
+        <label class="ops-field">
+          <span class="label">Fecha</span>
+          <input type="datetime-local" name="scheduledAt" class="ops-input" />
+        </label>
+        <label class="ops-field ops-field--venue">
+          <span class="label">Sede</span>
+          <VenueSelect
+            sport={tournament.sport}
+            emptyLabel="Sin sede"
+          />
+        </label>
+        <label class="ops-field ops-field--ref">
+          <span class="label">Árbitro</span>
+          <RefereeSelect referees={referees} />
+        </label>
+        <button type="submit" class="btn-accent" style="padding: 10px 18px; align-self: end;">
+          Agregar
+        </button>
+      </form>
+    </section>
+  )}
+</div>
+
+<style>
+.ops-ok {
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.35);
+  color: #86efac;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+}
+.ops-err {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+}
+.ops-empty {
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+.ops-empty a { color: var(--accent); }
+.ops-stage { margin-bottom: 28px; }
+.ops-stage__title {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.ops-table {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ops-block { min-width: 0; }
+.ops-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  height: 100%;
+}
+.ops-row__top {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.ops-row__bottom {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr minmax(0, 1.4fr) minmax(0, 1.1fr);
+  gap: 8px;
+}
+.ops-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr 110px 170px minmax(120px, 1fr) minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.ops-row__teams { flex: 1; min-width: 0; }
+.ops-row__home, .ops-row__away {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.ops-row__score {
+  display: inline-block;
+  margin: 0 8px;
+  vertical-align: middle;
+}
+.ops-row__names {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ops-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ops-field--status { width: 132px; flex-shrink: 0; }
+.ops-field--venue,
+.ops-field--ref { min-width: 0; }
+.ops-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+}
+.ops-input:focus { border-color: var(--accent); }
+.ops-row__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 1100px) {
+  .ops-table { grid-template-columns: 1fr; }
+  .ops-row__top { flex-wrap: wrap; }
+  .ops-field--status { width: 100%; }
+  .ops-row__bottom,
+  .ops-add { grid-template-columns: 1fr 1fr; }
+  .ops-field--venue,
+  .ops-field--ref { grid-column: 1 / -1; }
+}
+</style>

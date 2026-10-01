@@ -1,0 +1,200 @@
+---
+/**
+ * Ajustes de perfil: foto, color y clave.
+ */
+import Base from '../layouts/Base.astro';
+import ProfileShell from '../layouts/ProfileShell.astro';
+import PlayerLookFields from '../components/player/PlayerLookFields.astro';
+import { requireAuth } from '../lib/auth';
+import { api } from '../lib/api';
+import { applyAvatarIntent } from '../lib/playerLook';
+import { DEFAULT_TEAM_COLORS } from '../lib/tournamentWizard';
+import { mediaUrl } from '../lib/media';
+
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
+
+let error: string | null = null;
+const saved = Astro.url.searchParams.get('ok');
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  try {
+    if (String(form.get('intent') ?? '') === 'password') {
+      const password = String(form.get('password') ?? '');
+      const passwordConfirm = String(form.get('passwordConfirm') ?? '');
+      const currentPassword = String(form.get('currentPassword') ?? '');
+      if (password !== passwordConfirm) {
+        throw new Error('Las claves no coinciden');
+      }
+      await api.patch(
+        '/auth/me',
+        {
+          password,
+          ...(auth.hasPassword ? { currentPassword } : {}),
+        },
+        Astro.request
+      );
+      return Astro.redirect('/settings?ok=clave');
+    }
+    if (await applyAvatarIntent(form, Astro.request)) {
+      return Astro.redirect('/settings?ok=1');
+    }
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo guardar';
+  }
+}
+
+const hex = auth.color && /^#[0-9A-Fa-f]{6}$/.test(auth.color)
+  ? auth.color
+  : DEFAULT_TEAM_COLORS[0]!;
+const back = auth.role === 'PLAYER' ? '/me/player' : '/profile';
+const okLook = saved === '1';
+const okPass = saved === 'clave';
+---
+
+<Base title="Ajustes de perfil | Chapi" description="Foto, color y clave de tu perfil." noIndex={true}>
+  <ProfileShell>
+    <div class="set">
+      <p class="set__kicker"><a href={back}>Volver al perfil</a></p>
+      <h1 class="set__title">Foto y color</h1>
+      <p class="set__lead">
+        En tenis esta foto y este color son los que se ven en el cuadro y los partidos.
+        En estadísticas se muestra la foto; si no hay, las iniciales.
+      </p>
+
+      {okLook && !error && (
+        <p class="set__ok" role="status">Guardado.</p>
+      )}
+      {error && (
+        <p class="set__err" role="alert">{error}</p>
+      )}
+
+      <form method="POST" enctype="multipart/form-data" class="set__form">
+        <input type="hidden" name="intent" value="look" />
+        <PlayerLookFields
+          color={hex}
+          photoUrl={mediaUrl(auth.avatarUrl)}
+          shortName={auth.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || 'YO'}
+          showClear={true}
+        />
+        <button type="submit" class="btn-accent">Guardar</button>
+      </form>
+
+      <h2 class="set__title set__title--sub">Clave</h2>
+      <p class="set__lead">
+        {auth.hasPassword
+          ? 'Cambia la clave con la que ingresas a Chapi.'
+          : 'Aún no tienes clave. Elige una para el próximo ingreso.'}
+      </p>
+      {okPass && !error && (
+        <p class="set__ok" role="status">Clave actualizada.</p>
+      )}
+
+      <form method="POST" class="set__form">
+        <input type="hidden" name="intent" value="password" />
+        {auth.hasPassword && (
+          <div class="set__field">
+            <label class="label" for="currentPassword">Clave actual</label>
+            <input
+              type="password"
+              id="currentPassword"
+              name="currentPassword"
+              required
+              autocomplete="current-password"
+              class="form-input"
+            />
+          </div>
+        )}
+        <div class="set__field">
+          <label class="label" for="password">Nueva clave</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            minlength="8"
+            maxlength="72"
+            autocomplete="new-password"
+            placeholder="Mínimo 8 caracteres"
+            class="form-input"
+          />
+        </div>
+        <div class="set__field">
+          <label class="label" for="passwordConfirm">Confirmar clave</label>
+          <input
+            type="password"
+            id="passwordConfirm"
+            name="passwordConfirm"
+            required
+            minlength="8"
+            maxlength="72"
+            autocomplete="new-password"
+            class="form-input"
+          />
+        </div>
+        <button type="submit" class="btn-accent">
+          {auth.hasPassword ? 'Cambiar clave' : 'Crear clave'}
+        </button>
+      </form>
+    </div>
+  </ProfileShell>
+</Base>
+
+<style>
+.set { max-width: 520px; }
+.set__kicker {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+}
+.set__kicker a { color: var(--accent); }
+.set__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+.set__title--sub { margin-top: 36px; font-size: 1.15rem; }
+.set__lead {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.set__ok {
+  color: #86efac;
+  font-size: 0.85rem;
+  margin: 0 0 14px;
+}
+.set__err {
+  color: #fca5a5;
+  font-size: 0.85rem;
+  margin: 0 0 14px;
+}
+.set__form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.set__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+  outline: none;
+  width: 100%;
+  max-width: 360px;
+}
+.form-input:focus { border-color: var(--accent); }
+</style>

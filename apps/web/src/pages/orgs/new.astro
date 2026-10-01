@@ -6,21 +6,30 @@
  */
 import Base from '../../layouts/Base.astro';
 import { requireAuth } from '../../lib/auth';
-import { api } from '../../lib/api';
+import { api, uploadOrgLogo } from '../../lib/api';
 
 const user = await requireAuth(Astro);
 if (user instanceof Response) return user;
 
 let error: string | null = null;
+let name = '';
+let city = '';
+let brandColor = '';
+let description = '';
 
 if (Astro.request.method === 'POST') {
   try {
     const form = await Astro.request.formData();
-    const name = String(form.get('name') ?? '').trim();
-    const city = String(form.get('city') ?? '').trim();
-    const brandColor = String(form.get('brandColor') ?? '').trim();
-    const description = String(form.get('description') ?? '').trim();
-    const logoUrl = String(form.get('logoUrl') ?? '').trim();
+    name = String(form.get('name') ?? '').trim();
+    city = String(form.get('city') ?? '').trim();
+    brandColor = String(form.get('brandColor') ?? '').trim();
+    description = String(form.get('description') ?? '').trim();
+
+    let logoUrl: string | undefined;
+    const logoFile = form.get('logo');
+    if (logoFile instanceof File && logoFile.size > 0) {
+      logoUrl = await uploadOrgLogo(logoFile, Astro.request);
+    }
 
     const created = await api.post<{ slug: string }>(
       '/organizations',
@@ -29,16 +38,18 @@ if (Astro.request.method === 'POST') {
         city: city || undefined,
         brandColor: brandColor || undefined,
         description: description || undefined,
-        logoUrl: logoUrl || undefined,
+        logoUrl,
       },
       Astro.request
     );
 
-    return Astro.redirect(`/orgs/${created.slug}`);
+    return Astro.redirect(`/orgs/${created.slug}?ok=creada`);
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : 'No se pudo crear la empresa';
   }
 }
+
+const colorValue = /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#00e5ff';
 ---
 
 <Base title="Crear empresa | Chapi" description="Registra tu empresa para publicar torneos." noIndex={true}>
@@ -56,36 +67,42 @@ if (Astro.request.method === 'POST') {
         <div class="auth-error" role="alert">{error}</div>
       )}
 
-      <form method="POST" class="auth-form">
+      <form method="POST" enctype="multipart/form-data" class="auth-form">
         <div class="form-field">
           <label class="label" for="name">Nombre</label>
           <input type="text" id="name" name="name" required
+            value={name}
             placeholder="Liga Amateur Bogotá" class="form-input" />
         </div>
 
         <div class="form-field">
           <label class="label" for="city">Ciudad</label>
           <input type="text" id="city" name="city"
+            value={city}
             placeholder="Bogotá" class="form-input" />
         </div>
 
         <div class="form-field">
           <label class="label" for="brandColor">Color de marca</label>
-          <input type="text" id="brandColor" name="brandColor"
-            placeholder="#00e5ff" pattern="^#?[0-9A-Fa-f]{6}$" class="form-input" />
+          <div class="color-row">
+            <input type="color" id="brandColorPicker" value={colorValue} aria-label="Elegir color" />
+            <input type="text" id="brandColor" name="brandColor"
+              value={colorValue} placeholder="#00e5ff"
+              pattern="^#?[0-9A-Fa-f]{6}$" class="form-input" />
+          </div>
         </div>
 
         <div class="form-field">
-          <label class="label" for="logoUrl">URL del logo (opcional)</label>
-          <input type="url" id="logoUrl" name="logoUrl"
-            placeholder="https://…" class="form-input" />
+          <label class="label" for="logo">Logo (opcional)</label>
+          <input type="file" id="logo" name="logo" class="form-input"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" />
         </div>
 
         <div class="form-field">
           <label class="label" for="description">Descripción</label>
           <textarea id="description" name="description" rows="4"
             placeholder="Quiénes son, qué torneos organizan…"
-            class="form-input form-input--area"></textarea>
+            class="form-input form-input--area">{description}</textarea>
         </div>
 
         <button type="submit" class="btn-accent" style="width:100%; justify-content:center; padding: 12px;">
@@ -150,4 +167,25 @@ if (Astro.request.method === 'POST') {
 }
 .form-input:focus { border-color: var(--accent); }
 .form-input::placeholder { color: var(--text-muted); }
+.color-row { display: flex; align-items: center; gap: 10px; }
+.color-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
 </style>
+
+<script>
+  const picker = document.getElementById('brandColorPicker') as HTMLInputElement | null;
+  const text = document.getElementById('brandColor') as HTMLInputElement | null;
+  if (picker && text) {
+    picker.addEventListener('input', () => { text.value = picker.value; });
+    text.addEventListener('input', () => {
+      if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) picker.value = text.value;
+    });
+  }
+</script>

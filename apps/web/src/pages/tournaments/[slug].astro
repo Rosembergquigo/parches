@@ -28,19 +28,77 @@
  */
 import Base from '../../layouts/Base.astro';
 import TournamentHero from '../../components/tournament/TournamentHero.astro';
+import TournamentJoin from '../../components/tournament/TournamentJoin.astro';
 import TournamentLiveBar from '../../components/tournament/TournamentLiveBar.astro';
 import TournamentFixtureStrip from '../../components/tournament/TournamentFixtureStrip.astro';
 import StandingsTable from '../../components/tournament/StandingsTable.astro';
 import PlayerStatsTable from '../../components/tournament/PlayerStatsTable.astro';
 import TeamsGrid from '../../components/tournament/TeamsGrid.astro';
 import TournamentNewsFeed from '../../components/tournament/TournamentNewsFeed.astro';
-import { getTournamentDetail } from '../../lib/api';
-import { getTeamsForTournament, getAllStandingsRows, getTournamentNews } from '../../data/mock';
+import { isIndividualSport } from '@parches/config';
+import {
+  ApiError,
+  enrollInTournament,
+  getMyTournamentEntry,
+  getTournamentDetail,
+  getTournamentPosts,
+} from '../../lib/api';
+import { getSessionContext } from '../../lib/session';
+import { getTeamsForTournament, getAllStandingsRows } from '../../data/mock';
+import type { TournamentEntry } from '../../lib/api';
 
 const { slug } = Astro.params;
 
 const tournament = await getTournamentDetail(slug!, Astro.request);
 if (!tournament) return Astro.redirect('/404');
+
+const session = await getSessionContext(Astro.request).catch(() => ({
+  user: null,
+  organizations: [] as { id: string; slug: string }[],
+  modules: [],
+}));
+
+const individual = isIndividualSport(tournament.sport);
+const enrollOpen = individual && tournament.status !== 'FINISHED';
+const joinNext = `/tournaments/${tournament.slug}?inscribir=1`;
+const loginHref = `/login?next=${encodeURIComponent(joinNext)}`;
+
+let enrollError: string | null = null;
+let myEntry: TournamentEntry | null = null;
+
+async function completeEnroll() {
+  try {
+    return await enrollInTournament(tournament!.slug || tournament!.id, Astro.request);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      return getMyTournamentEntry(tournament!.slug || tournament!.id, Astro.request);
+    }
+    throw err;
+  }
+}
+
+if (enrollOpen && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (form.get('intent') === 'enroll') {
+    if (!session.user) return Astro.redirect(loginHref);
+    try {
+      const entry = await completeEnroll();
+      const teamId = entry?.teamId;
+      if (teamId) return Astro.redirect(`/teams/${teamId}?ok=inscrito`);
+      return Astro.redirect(`/tournaments/${tournament.slug}?ok=inscrito`);
+    } catch (err) {
+      enrollError = err instanceof Error ? err.message : 'No se pudo completar la inscripción';
+    }
+  }
+}
+
+if (enrollOpen && session.user) {
+  myEntry = await getMyTournamentEntry(tournament.slug || tournament.id, Astro.request);
+}
+
+const enrolledNotice = Astro.url.searchParams.get('ok') === 'inscrito'
+  ? 'Quedaste inscrito en este torneo.'
+  : null;
 
 const liveMatches = tournament.matches.filter(m => m.status === 'LIVE');
 
@@ -59,14 +117,23 @@ const showPlayoffs =
   tournament.policies?.playoffs === true &&
   (tournament.playoffGroups?.length ?? 0) > 0;
 
-const newsPosts = getTournamentNews(tournament.id);
+const newsPosts = await getTournamentPosts(tournament.slug || tournament.id, Astro.request);
 const hasPlayerStats = !!tournament.playerStats?.length;
+const orgSlug = tournament.organization?.slug;
+const canComposeForum = !!(
+  orgSlug && session.organizations.some(o => o.slug === orgSlug || o.id === tournament.organization?.id)
+);
+const composeHref = canComposeForum
+  ? `/orgs/${orgSlug}/dashboard?t=${tournament.slug}&op=foro`
+  : undefined;
+
+const rosterTabLabel = individual ? 'Jugadores' : 'Equipos';
 
 // Tabs: Tabla | Equipos + Estadísticas como pestaña adicional (si hay datos).
 // Noticias/Foro ya no vive aquí — ver sección aparte más abajo.
 const tabs = [
   hasStandings   && { id: 'tabla', label: 'Tabla' },
-  teams.length > 0 && { id: 'equipos', label: 'Equipos' },
+  teams.length > 0 && { id: 'equipos', label: rosterTabLabel },
   hasPlayerStats && { id: 'estadisticas', label: 'Estadísticas' },
 ].filter((t): t is { id: string; label: string } => !!t);
 ---
@@ -77,7 +144,17 @@ const tabs = [
 >
 
   <!-- Header: branding dinámico (paleta / foto de fondo) -->
-  <TournamentHero tournament={tournament} />
+  <TournamentHero tournament={tournament}>
+    {enrollOpen && (
+      <TournamentJoin
+        slot="entry"
+        loginHref={session.user ? undefined : loginHref}
+        teamHref={myEntry ? `/teams/${myEntry.teamId}` : undefined}
+        error={enrollError}
+        notice={enrolledNotice}
+      />
+    )}
+  </TournamentHero>
 
   <main class="t-page">
     <div class="t-page__inner">
@@ -150,6 +227,8 @@ const tabs = [
             teams={teams}
             standings={getAllStandingsRows(tournament)}
             brandColor={tournament.brandColor}
+            heading={individual ? 'Jugadores' : 'Equipos'}
+            metaLabel={individual ? 'Ver ficha' : 'Ver plantilla'}
           />
         </div>
       )}
@@ -179,6 +258,7 @@ const tabs = [
           posts={newsPosts}
           tournamentSlug={tournament.slug}
           brandColor={tournament.brandColor}
+          composeHref={composeHref}
         />
       </section>
 
@@ -221,7 +301,6 @@ const tabs = [
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 8px 16px;
   border-radius: var(--radius-pill);

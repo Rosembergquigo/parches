@@ -1,11 +1,11 @@
 ---
 /**
- * OrganizationsPanel.astro — "Mis empresas" en el perfil.
+ * OrganizationsPanel.astro — empresas en el panel de organizador (/me/organizer).
  *
- * Siempre visible para el usuario autenticado: organizar no depende de
- * User.role. Lista membresías y un CTA para crear otra empresa.
+ * Organizar no depende de User.role: lista membresías y un CTA para crear empresa.
  */
 import type { OrganizationSummary, OrgRole } from '../../data/mock';
+import { canAdminOrg } from '../../lib/session';
 
 interface Props {
   organizations: OrganizationSummary[];
@@ -66,9 +66,14 @@ function initials(name: string): string {
               </span>
             </div>
           </a>
-          <a href={`/orgs/${org.slug}/tournaments/new`} class="org-card__action">
-            Crear torneo
+          <a href={`/orgs/${org.slug}`} class="org-card__action">
+            Torneos
           </a>
+          {canAdminOrg(org.myRole) && (
+            <a href={`/orgs/${org.slug}/settings`} class="org-card__action">
+              Ajustes
+            </a>
+          )}
         </div>
       ))}
     </div>
@@ -89,7 +94,6 @@ function initials(name: string): string {
   font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-primary);
   margin: 0;
 }
@@ -132,7 +136,6 @@ function initials(name: string): string {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent);
   flex-shrink: 0;
   padding: 6px 0;
@@ -160,7 +163,6 @@ function initials(name: string): string {
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -171,7 +173,6 @@ function initials(name: string): string {
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .org-card svg { color: var(--text-muted); flex-shrink: 0; }

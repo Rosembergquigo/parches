@@ -2,6 +2,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { MatchStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireTournamentEditor, userIdFrom } from '../lib/authz.js';
+import { withPlayerPhotos } from '../lib/playerPhoto.js';
+import {
+  kickoffRemindedValue,
+  notifyMatchKickoff,
+  sameMinute,
+} from '../lib/notify.js';
 
 export const matchRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
@@ -11,11 +17,13 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
         homeTeam: true,
         awayTeam: true,
         tournament: true,
+        referee: { select: { id: true, name: true } },
         events: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
     if (!match) return reply.status(404).send({ error: 'Not found' });
-    return reply.send(match);
+    const [homeTeam, awayTeam] = await withPlayerPhotos(match.tournament.sport, [match.homeTeam, match.awayTeam]);
+    return reply.send({ ...match, homeTeam, awayTeam });
   });
 
   app.patch<{
@@ -26,9 +34,11 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       status?: MatchStatus;
       clock?: string;
       period?: string;
-      venue?: string;
-      scheduledAt?: string;
-      startedAt?: string;
+      venue?: string | null;
+      stage?: string | null;
+      refereeId?: string | null;
+      scheduledAt?: string | null;
+      startedAt?: string | null;
       stats?: Prisma.InputJsonValue;
     };
   }>('/:id', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -40,11 +50,62 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     const userId = userIdFrom(req);
     const isReferee = existing.refereeId === userId;
     if (!isReferee && !(await requireTournamentEditor(req, reply, existing.tournament.organizationId))) return;
+
+    const body = req.body ?? {};
+    const data: Prisma.MatchUpdateInput = {};
+    if (body.homeScore !== undefined) data.homeScore = Number(body.homeScore);
+    if (body.awayScore !== undefined) data.awayScore = Number(body.awayScore);
+    if (body.status !== undefined) data.status = body.status;
+    if (body.clock !== undefined) data.clock = body.clock || null;
+    if (body.period !== undefined) data.period = body.period || null;
+    if (body.venue !== undefined) data.venue = body.venue?.trim() || null;
+    if (body.stage !== undefined) data.stage = body.stage?.trim() || null;
+    if (body.refereeId !== undefined) {
+      const refereeId = body.refereeId?.trim() || null;
+      if (!refereeId) {
+        data.referee = { disconnect: true };
+      } else {
+        const referee = await prisma.user.findFirst({ where: { id: refereeId, role: 'REFEREE' } });
+        if (!referee && existing.refereeId !== refereeId) {
+          return reply.status(400).send({ error: 'refereeId is not a referee' });
+        }
+        data.referee = { connect: { id: refereeId } };
+      }
+    }
+    if (body.scheduledAt !== undefined) {
+      data.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    }
+    if (body.startedAt !== undefined) {
+      data.startedAt = body.startedAt ? new Date(body.startedAt) : null;
+    }
+    if (body.stats !== undefined) data.stats = body.stats;
+    if (body.status === 'LIVE' && !existing.startedAt && data.startedAt === undefined) {
+      data.startedAt = new Date();
+    }
+
+    const nextStatus = body.status ?? existing.status;
+    const nextKickoff = body.scheduledAt !== undefined
+      ? (body.scheduledAt ? new Date(body.scheduledAt) : null)
+      : undefined;
+    let kickoffKind: 'scheduled' | 'rescheduled' | null = null;
+    if (nextKickoff !== undefined) {
+      if (!nextKickoff) {
+        data.kickoffRemindedAt = null;
+      } else if (
+        nextStatus === 'SCHEDULED'
+        && !sameMinute(existing.scheduledAt, nextKickoff)
+      ) {
+        kickoffKind = existing.scheduledAt ? 'rescheduled' : 'scheduled';
+        data.kickoffRemindedAt = kickoffRemindedValue(nextKickoff);
+      }
+    }
+
     const match = await prisma.match.update({
       where: { id: req.params.id },
-      data: req.body,
-      include: { homeTeam: true, awayTeam: true },
+      data,
+      include: { homeTeam: true, awayTeam: true, referee: { select: { id: true, name: true } } },
     });
+    if (kickoffKind) notifyMatchKickoff(match.id, kickoffKind);
     return reply.send(match);
   });
 

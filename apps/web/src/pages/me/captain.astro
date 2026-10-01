@@ -1,0 +1,202 @@
+---
+/**
+ * Módulo capitán — escudo y plantilla de los equipos que capitanas.
+ */
+import Base from '../../layouts/Base.astro';
+import ProfileShell from '../../layouts/ProfileShell.astro';
+import CaptainTeams from '../../components/captain/CaptainTeams.astro';
+import { requireAuth } from '../../lib/auth';
+import {
+  api,
+  addTeamPlayer,
+  listCaptainedTeams,
+  listTeamEnrollments,
+  removeTeamPlayer,
+  updateTeamEnrollment,
+  uploadTeamLogo,
+  type CaptainedTeam,
+  type TeamEnrollment,
+} from '../../lib/api';
+
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
+if (!auth.isCaptain) return Astro.redirect('/profile');
+
+function parseJerseyField(form: FormData): { jerseyNumber: number | null } | { error: string } {
+  const raw = String(form.get('jerseyNumber') ?? '').trim();
+  if (!raw) return { jerseyNumber: null };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 99) {
+    return { error: 'El dorsal debe ser un entero entre 0 y 99' };
+  }
+  return { jerseyNumber: n };
+}
+
+async function logoFromForm(form: FormData, request: Request): Promise<string | null | undefined> {
+  if (String(form.get('clearLogo') ?? '') === '1') return null;
+  const file = form.get('logo');
+  if (file instanceof File && file.size > 0) {
+    return uploadTeamLogo(file, request);
+  }
+  return undefined;
+}
+
+let error: string | null = null;
+const saved = Astro.url.searchParams.get('ok') === '1';
+let teams: CaptainedTeam[] = [];
+
+try {
+  teams = await listCaptainedTeams(Astro.request);
+} catch {
+  return Astro.redirect('/profile');
+}
+
+if (teams.length === 0) return Astro.redirect('/profile');
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const back = '/me/captain?ok=1';
+  try {
+    if (intent === 'updateCrest') {
+      const teamId = String(form.get('teamId') ?? '');
+      const logoUrl = await logoFromForm(form, Astro.request);
+      if (logoUrl === undefined) {
+        error = 'Elige un escudo o marca quitar escudo';
+      } else {
+        await api.patch(`/teams/${teamId}`, { logoUrl }, Astro.request);
+        return Astro.redirect(`${back}#tm-${teamId}`);
+      }
+    }
+
+    if (intent === 'enroll' || intent === 'reactivatePlayer') {
+      const teamId = String(form.get('teamId') ?? '');
+      const email = String(form.get('email') ?? '').trim();
+      const name = String(form.get('name') ?? '').trim();
+      const phone = String(form.get('phone') ?? '').trim();
+      const position = String(form.get('position') ?? '').trim();
+      const jersey = parseJerseyField(form);
+      if ('error' in jersey) {
+        error = jersey.error;
+      } else if (!email) {
+        error = 'El correo es obligatorio';
+      } else {
+        const payload: Parameters<typeof addTeamPlayer>[1] = { email };
+        if (name) payload.name = name;
+        if (phone) payload.phone = phone;
+        if (position) payload.position = position;
+        if (jersey.jerseyNumber !== null) payload.jerseyNumber = jersey.jerseyNumber;
+        else if (intent === 'enroll') payload.jerseyNumber = null;
+        await addTeamPlayer(teamId, payload, Astro.request);
+        return Astro.redirect(`${back}#tm-${teamId}`);
+      }
+    }
+
+    if (intent === 'updatePlayer') {
+      const teamId = String(form.get('teamId') ?? '');
+      const enrollmentId = String(form.get('enrollmentId') ?? '');
+      const name = String(form.get('name') ?? '').trim();
+      const phone = String(form.get('phone') ?? '').trim();
+      const position = String(form.get('position') ?? '').trim();
+      const jersey = parseJerseyField(form);
+      if ('error' in jersey) {
+        error = jersey.error;
+      } else if (!name) {
+        error = 'El nombre no puede quedar vacío';
+      } else {
+        await updateTeamEnrollment(
+          teamId,
+          enrollmentId,
+          {
+            name,
+            phone: phone || null,
+            jerseyNumber: jersey.jerseyNumber,
+            position: position || null,
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#pl-${enrollmentId}`);
+      }
+    }
+
+    if (intent === 'removePlayer') {
+      const teamId = String(form.get('teamId') ?? '');
+      const enrollmentId = String(form.get('enrollmentId') ?? '');
+      await removeTeamPlayer(teamId, enrollmentId, Astro.request);
+      return Astro.redirect(`${back}#tm-${teamId}`);
+    }
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo guardar';
+  }
+
+  try {
+    teams = await listCaptainedTeams(Astro.request);
+  } catch {
+    /* keep previous */
+  }
+}
+
+const rosterByTeam: Record<string, TeamEnrollment[]> = {};
+const entries = await Promise.all(
+  teams.map(async team => {
+    try {
+      const rows = await listTeamEnrollments(team.id, Astro.request);
+      return [team.id, rows] as const;
+    } catch {
+      return [team.id, [] as TeamEnrollment[]] as const;
+    }
+  })
+);
+for (const [id, rows] of entries) rosterByTeam[id] = rows;
+---
+
+<Base title={`Capitán · ${auth.name} | Chapi`} description="Escudo y plantilla de tus equipos" noIndex={true}>
+  <header class="cap-hero">
+    <div class="cap-hero__inner">
+      <p class="cap-hero__kicker">Módulo</p>
+      <h1 class="cap-hero__title">Capitán</h1>
+      <p class="cap-hero__lead">
+        Escudo y plantilla de tus equipos. El organizador sigue viendo todo en Equipos.
+      </p>
+    </div>
+  </header>
+  <ProfileShell>
+    <CaptainTeams teams={teams} rosterByTeam={rosterByTeam} error={error} saved={saved} />
+  </ProfileShell>
+</Base>
+
+<style>
+.cap-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 28px 0 8px;
+}
+.cap-hero__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 28px 20px;
+}
+.cap-hero__kicker {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.cap-hero__title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin: 0 0 6px;
+}
+.cap-hero__lead {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  max-width: 42rem;
+}
+@media (max-width: 900px) {
+  .cap-hero__inner { padding: 0 16px 16px; }
+}
+</style>

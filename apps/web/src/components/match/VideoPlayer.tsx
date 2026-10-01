@@ -229,7 +229,7 @@ export default function VideoPlayer({
           border-radius: 3px;
           font-family: 'Barlow Condensed', sans-serif;
           font-size: 0.62rem; font-weight: 700;
-          letter-spacing: 0.1em; text-transform: uppercase;
+          letter-spacing: 0.1em;
           color: #fff;
         }
         .vp__live-dot {
@@ -262,7 +262,7 @@ export default function VideoPlayer({
         .vp__error-text {
           font-family: 'Barlow Condensed', sans-serif;
           font-size: 0.85rem; font-weight: 600;
-          letter-spacing: 0.06em; text-transform: uppercase;
+          letter-spacing: 0.06em;
           color: #ff3b3b;
         }
       `}</style>
@@ -297,7 +297,6 @@ function PlaceholderStyles() {
         font-size: 1rem;
         font-weight: 700;
         letter-spacing: 0.05em;
-        text-transform: uppercase;
         color: #f0f2f5;
         margin-bottom: 6px;
       }

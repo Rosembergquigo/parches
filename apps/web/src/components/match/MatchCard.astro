@@ -16,6 +16,7 @@
  * La prop `venue`, `period` y `sport` son opcionales.
  */
 import type { MatchSnippet, Sport } from '../../data/mock';
+import TeamCrest from '../team/TeamCrest.astro';
 
 interface Props {
   match: MatchSnippet;
@@ -48,9 +49,9 @@ const colorA = homeTeam.color ?? fallbackA;
 const colorB = awayTeam.color ?? fallbackB;
 // Se mezcla con negro para que el color del equipo no rompa el tema oscuro
 // y mantenga contraste con el texto/escudos blancos del hero.
-const shadeA = `color-mix(in srgb, ${colorA} 55%, #05070a 45%)`;
-const shadeB = `color-mix(in srgb, ${colorB} 55%, #05070a 45%)`;
-const heroBg = `linear-gradient(90deg, ${shadeA} 0%, ${shadeA} 44%, ${shadeB} 56%, ${shadeB} 100%)`;
+const shadeA = `color-mix(in srgb, ${colorA} 54%, #05070a 55%)`;
+const shadeB = `color-mix(in srgb, ${colorB} 54%, #05070a 55%)`;
+const heroBg = `linear-gradient(110deg, ${shadeA} 0% 49%, ${shadeB} 50% 100%)`;
 
 // Format scheduled time
 function formatScheduled(iso?: string): string {
@@ -102,16 +103,12 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
     </div>
 
     <div class="mc__hero-crests">
-      <div class="mc__crest" aria-hidden="true">
-        {homeTeam.logoUrl
-          ? <img src={homeTeam.logoUrl} alt="" loading="lazy" />
-          : <span>{homeTeam.shortName}</span>}
+      <div class="mc__crest">
+        <TeamCrest shortName={homeTeam.shortName} logoUrl={homeTeam.logoUrl} />
       </div>
       <span class="mc__vs">VS</span>
-      <div class="mc__crest" aria-hidden="true">
-        {awayTeam.logoUrl
-          ? <img src={awayTeam.logoUrl} alt="" loading="lazy" />
-          : <span>{awayTeam.shortName}</span>}
+      <div class="mc__crest">
+        <TeamCrest shortName={awayTeam.shortName} logoUrl={awayTeam.logoUrl} />
       </div>
     </div>
   </div>
@@ -119,16 +116,14 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   <!-- Teams + scores -->
   <div class="mc__body">
     <div class="mc__team-row">
-      <div class="mc__logo" aria-hidden="true">{homeTeam.shortName}</div>
-      <div class="mc__name">{homeTeam.name.split(' ')[0]}</div>
+      <div class="mc__name">{homeTeam.name}</div>
       <div class:list={['mc__score', homeWins && !isScheduled && 'mc__score--win']}>
         {isScheduled ? '−' : homeScore}
       </div>
     </div>
     <div class="mc__divider"></div>
     <div class="mc__team-row">
-      <div class="mc__logo" aria-hidden="true">{awayTeam.shortName}</div>
-      <div class="mc__name">{awayTeam.name.split(' ')[0]}</div>
+      <div class="mc__name">{awayTeam.name}</div>
       <div class:list={['mc__score', awayWins && !isScheduled && 'mc__score--win']}>
         {isScheduled ? '−' : awayScore}
       </div>
@@ -159,51 +154,42 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 /* ── Base card ──────────────────────────────────────────── */
 .mc {
   flex-shrink: 0;
-  width: 400px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  width: 340px;
+  background: transparent;
+  border: none;
   cursor: pointer;
   text-decoration: none;
   display: block;
   position: relative;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: transform 0.2s ease;
+  margin-right: 10px;
 }
 .mc:hover {
   transform: translateY(-3px);
 }
 
-/* top accent line by state — sits above the hero */
-.mc--live::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--live);
-  z-index: 3;
-}
-.mc--scheduled::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--accent);
-  z-index: 3;
-}
-.mc--live:hover    { border-color: rgba(255, 59, 59, 0.4); }
-.mc--scheduled:hover { border-color: rgba(0, 229, 255, 0.4); }
-.mc--finished:hover  { border-color: var(--border-hover); }
-
 /* ── Hero: escudos + degradado con cambio en la mitad ──── */
 .mc__hero {
   position: relative;
   height: 200px;
-  padding: 9px 11px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  border-radius: 12px 12px 20px 20px;
+  overflow: hidden;
+  margin-bottom: 6px;
 }
+.mc--live .mc__hero::before,
+.mc--scheduled .mc__hero::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 3;
+}
+.mc--live .mc__hero::before { background: var(--live); }
+.mc--scheduled .mc__hero::before { background: var(--accent); }
 
 .mc__hero-top {
   display: flex;
@@ -214,10 +200,9 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 }
 .mc__status {
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -250,32 +235,42 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 .mc__hero-crests {
   position: relative;
   z-index: 2;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 20px;
+  min-height: 0;
 }
 .mc__crest {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 14px;
+  /*background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);*/ 
   overflow: hidden;
-  flex-shrink: 0;
 }
-.mc__crest img {
+.mc__crest :global(.crest) {
+  width: 100%;
+  height: 100%;
+}
+.mc__crest :global(img) {
+  max-width: 100%;
+  max-height: 100%;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 5px;
+  object-position: center;
+  padding: 8px;
+  box-sizing: border-box;
 }
-.mc__crest span {
+.mc__crest :global(.crest__abbr) {
   font-family: var(--font-display);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 900;
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.85);
@@ -285,46 +280,28 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
   font-size: 0.6rem;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
 }
 
 /* ── Body: teams ────────────────────────────────────────── */
 .mc__body {
-  padding: 10px 12px 6px;
-  background-color: rgba(255, 255, 255, 0.1);
+  padding: 8px 10px 2px;
+  background: none;
 }
 .mc__team-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 5px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
 .mc__team-row:last-of-type { margin-bottom: 0; }
 
-.mc__logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 0.5rem;
-  font-weight: 800;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
 .mc__name {
   font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.90rem;
+  font-weight: 400;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--text-primary);
   flex: 1;
   white-space: nowrap;
@@ -333,10 +310,10 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 }
 .mc__score {
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 0.88rem;
   font-weight: 900;
   color: var(--text-primary);
-  min-width: 18px;
+  min-width: 16px;
   text-align: right;
   flex-shrink: 0;
 }
@@ -344,50 +321,46 @@ const viewersLabel   = viewerCount ? formatViewers(viewerCount) : '';
 
 .mc__divider {
   height: 1px;
-  background: var(--border);
-  margin: 6px 0;
+  background: transparent;
+  margin: 3px 0;
 }
 
 /* ── Period ─────────────────────────────────────────────── */
 .mc__period {
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: 0.52rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-muted);
-  padding: 0 12px 8px;
+  padding: 2px 10px 4px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background-color: rgba(255, 255, 255, 0.1);
+  background: none;
 }
 
 /* ── Footer ─────────────────────────────────────────────── */
 .mc__footer {
-  border-top: 1px solid var(--border);
-  padding: 7px 12px;
+  padding: 4px 10px 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: rgba(255, 255, 255, 0.1);
+  background: none;
 }
 .mc__viewers {
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: 0.52rem;
   font-weight: 600;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .mc__btn {
   font-family: var(--font-display);
-  font-size: 0.65rem;
+  font-size: 0.55rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 5px;
   flex-shrink: 0;
 }

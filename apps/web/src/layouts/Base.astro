@@ -15,7 +15,7 @@
  */
 
 import Navbar from '../components/nav/Navbar.astro';
-import { getOptionalUser } from '../lib/auth';
+import { getSessionContext } from '../lib/session';
 import '../styles/global.css';
 
 interface Props {
@@ -35,7 +35,11 @@ const {
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
 
 // Carga silenciosa del usuario — nunca bloquea si el api no responde
-const user = await getOptionalUser(Astro.request).catch(() => null);
+const session = await getSessionContext(Astro.request).catch(() => ({
+  user: null,
+  organizations: [],
+  modules: [],
+}));
 ---
 
 <!doctype html>
@@ -72,7 +76,7 @@ const user = await getOptionalUser(Astro.request).catch(() => null);
 </head>
 
 <body>
-  <Navbar user={user} currentPath={Astro.url.pathname} />
+  <Navbar user={session.user} modules={session.modules} currentPath={Astro.url.pathname} />
 
   <slot />
 
@@ -80,7 +84,7 @@ const user = await getOptionalUser(Astro.request).catch(() => null);
     <div class="site-footer__inner">
       <div class="site-footer__brand">
         <span class="navbar__logo-mark" style="display:inline-flex;width:24px;height:24px;font-size:0.85rem;">PCH</span>
-        <span style="font-family:var(--font-display);font-size:0.9rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">
+        <span style="font-family:var(--font-display);font-size:0.9rem;font-weight:700;letter-spacing:0.06em;">
           Cha<em style="font-style:normal;color:var(--accent);">Pi</em>
         </span>
       </div>
@@ -88,10 +92,11 @@ const user = await getOptionalUser(Astro.request).catch(() => null);
         &copy; {new Date().getFullYear()} Chapi. Todos los derechos reservados.
       </p>
       <nav class="site-footer__links" aria-label="Links del pie">
+        <a href="/venues">Canchas</a>
         <a href="/about">Nosotros</a>
         <a href="/terms">Términos</a>
         <a href="/privacy">Privacidad</a>
-        <a href="/profile">Perfil</a>
+        <a href="/profile">Mi cuenta</a>
       </nav>
     </div>
   </footer>

@@ -1,0 +1,23 @@
+---
+/**
+ * Contenedor compartido de los módulos de cuenta
+ * (visualizador, jugador, árbitro).
+ */
+---
+<main class="profile-page">
+  <div class="profile-page__inner">
+    <slot />
+  </div>
+</main>
+
+<style>
+.profile-page { flex: 1; padding-bottom: 60px; }
+.profile-page__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 28px;
+}
+@media (max-width: 900px) {
+  .profile-page__inner { padding: 20px 16px; }
+}
+</style>

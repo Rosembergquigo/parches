@@ -8,6 +8,8 @@
  * objeto que reciben. Si el día de mañana el shape de la API cambia, el único
  * lugar que hay que tocar es este archivo.
  */
+import { toTitleCase } from '@parches/utils';
+import { mediaUrl } from './media';
 import type {
   Sport,
   MatchStatus,
@@ -49,6 +51,10 @@ export interface RawTeam {
   tournamentId?: string;
   groupId?: string | null;
   group?: RawGroup | null;
+  captainName?: string | null;
+  captainEmail?: string | null;
+  captainPhone?: string | null;
+  captainUserId?: string | null;
 }
 
 export interface RawGroup {
@@ -75,6 +81,8 @@ export interface RawMatch {
   scheduledAt?: string | null;
   startedAt?: string | null;
   createdAt: string;
+  refereeId?: string | null;
+  referee?: { id: string; name: string } | null;
   tournament?: RawTournament;
   stats?: MatchStatRow[] | null;
 }
@@ -94,6 +102,7 @@ export interface RawTournament {
   hasPlayoffs: boolean;
   qualifyingSpots?: number | null;
   organizationId?: string;
+  organization?: { id: string; slug: string; name: string };
   teams: RawTeam[];
   groups?: RawGroup[];
   matches: RawMatch[];
@@ -120,6 +129,7 @@ export interface RawPlayerStatRow {
   position: number;
   playerName: string;
   playerShortName: string;
+  playerAvatarUrl?: string | null;
   userId?: string;
   team: { id: string; name: string; shortName: string };
   statValue: number;
@@ -209,6 +219,7 @@ export interface RawUser {
   name: string;
   role: 'VIEWER' | 'PLAYER' | 'REFEREE' | 'ORGANIZER' | 'ADMIN';
   avatarUrl?: string | null;
+  color?: string | null;
   bio?: string | null;
   createdAt: string;
   matchesRefereed?: number;
@@ -227,9 +238,9 @@ export interface RawRefereeMatches {
 export function toTeamSnippet(team: RawTeam): TeamSnippet {
   return {
     id: team.id,
-    name: team.name,
+    name: toTitleCase(team.name),
     shortName: team.shortName,
-    logoUrl: team.logoUrl ?? undefined,
+    logoUrl: team.logoUrl ? mediaUrl(team.logoUrl) : undefined,
     color: team.color ?? undefined,
   };
 }
@@ -320,6 +331,7 @@ export function mapTournamentListItem(raw: RawTournament): TournamentWithMatches
     status: raw.status,
     stage: stages.size === 1 ? [...stages][0]! : undefined,
     teamCount: raw.teams.length,
+    logoUrl: raw.logoUrl ? mediaUrl(raw.logoUrl) : undefined,
     matches: raw.matches.map(toMatchSnippet),
   };
 }
@@ -352,8 +364,11 @@ export function mapTournamentDetail(
     matches: raw.matches.map(toMatchSnippet),
     description: raw.description ?? undefined,
     brandColor: raw.brandColor ?? undefined,
-    logoUrl: raw.logoUrl ?? undefined,
-    backgroundImageUrl: raw.backgroundImageUrl ?? undefined,
+    logoUrl: raw.logoUrl ? mediaUrl(raw.logoUrl) : undefined,
+    backgroundImageUrl: raw.backgroundImageUrl ? mediaUrl(raw.backgroundImageUrl) : undefined,
+    organization: raw.organization
+      ? { id: raw.organization.id, slug: raw.organization.slug, name: raw.organization.name }
+      : undefined,
     qualifyingSpots: raw.qualifyingSpots ?? 4,
     policies: { playoffs: raw.hasPlayoffs },
     groups: regularMatches.length > 0 ? groupMatchesByStage(regularMatches, 'Partidos') : undefined,
@@ -380,8 +395,9 @@ export function mapTournamentDetail(
         position: row.position,
         playerName: row.playerName,
         playerShortName: row.playerShortName,
+        playerAvatarUrl: row.playerAvatarUrl ? mediaUrl(row.playerAvatarUrl) : undefined,
         userId: row.userId,
-        team: { id: row.team.id, name: row.team.name, shortName: row.team.shortName },
+        team: { id: row.team.id, name: toTitleCase(row.team.name), shortName: row.team.shortName },
         statValue: row.statValue,
         statLabel: row.statLabel,
       })),
@@ -411,14 +427,15 @@ export function mapTeamDetail(raw: RawTeamDetail): TeamDetail {
 
   return {
     id: raw.id,
-    name: raw.name,
+    name: toTitleCase(raw.name),
     shortName: raw.shortName,
-    logoUrl: raw.logoUrl ?? undefined,
+    logoUrl: raw.logoUrl ? mediaUrl(raw.logoUrl) : undefined,
     tournamentId: raw.tournament.id,
     tournamentName: raw.tournament.name,
     tournamentSlug: raw.tournament.slug ?? raw.tournament.id,
     sport: raw.tournament.sport as Sport,
     brandColor: raw.tournament.brandColor ?? undefined,
+    color: raw.color ?? undefined,
     standing: raw.standing
       ? {
           position: raw.standing.position,
@@ -477,6 +494,7 @@ export function mapMatchDetail(raw: RawMatchDetail): MatchDetail {
     clock: raw.clock ?? undefined,
     period: raw.period ?? undefined,
     venue: raw.venue ?? undefined,
+    referee: raw.referee ? { id: raw.referee.id, name: raw.referee.name } : undefined,
     scheduledAt: raw.scheduledAt ?? undefined,
     streamKey: raw.streamKey ?? undefined,
     hlsUrl: raw.hlsUrl ?? undefined,
@@ -494,7 +512,8 @@ export function mapUserProfile(raw: RawUser): UserProfile {
     email: raw.email,
     role: raw.role as UserRole,
     createdAt: raw.createdAt,
-    avatarUrl: raw.avatarUrl ?? undefined,
+    avatarUrl: raw.avatarUrl ? mediaUrl(raw.avatarUrl) : undefined,
+    color: raw.color ?? undefined,
     bio: raw.bio ?? undefined,
     matchesRefereed: raw.matchesRefereed,
     eventsLogged: raw.eventsLogged,
@@ -509,7 +528,7 @@ function toPlayerEnrollment(e: RawPlayerEnrollment): PlayerEnrollment {
     tournamentSlug: e.tournament.slug ?? e.tournament.id,
     sport: e.tournament.sport as Sport,
     teamId: e.teamId,
-    teamName: e.team.name,
+    teamName: toTitleCase(e.team.name),
     teamShortName: e.team.shortName,
     jerseyNumber: e.jerseyNumber ?? undefined,
     position: e.position ?? undefined,
@@ -528,7 +547,8 @@ export function mapPlayerProfile(raw: RawUser): PlayerProfileDetail {
     email: raw.email,
     role: 'PLAYER',
     createdAt: raw.createdAt,
-    avatarUrl: raw.avatarUrl ?? undefined,
+    avatarUrl: raw.avatarUrl ? mediaUrl(raw.avatarUrl) : undefined,
+    color: raw.color ?? undefined,
     bio: raw.bio ?? undefined,
     nationality: pp?.nationality ?? undefined,
     dateOfBirth: pp?.dateOfBirth ?? undefined,
@@ -578,7 +598,7 @@ export function mapOrganizationSummary(raw: RawOrganization): OrganizationSummar
     id: raw.id,
     slug: raw.slug,
     name: raw.name,
-    logoUrl: raw.logoUrl ?? undefined,
+    logoUrl: raw.logoUrl ? mediaUrl(raw.logoUrl) : undefined,
     brandColor: raw.brandColor ?? undefined,
     city: raw.city ?? undefined,
     myRole: raw.myRole ?? 'EDITOR',

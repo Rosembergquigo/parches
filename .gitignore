@@ -31,6 +31,13 @@ Thumbs.db
 # Prisma
 apps/api/prisma/migrations/
 
+# Uploads locales (blog / foro / escudos / empresas)
+apps/api/uploads/posts/
+apps/api/uploads/teams/
+apps/api/uploads/tournaments/
+apps/api/uploads/orgs/
+apps/api/uploads/users/
+
 # Expo
 apps/mobile/.expo/
 apps/mobile/android/

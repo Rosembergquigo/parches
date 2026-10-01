@@ -1,0 +1,177 @@
+---
+/**
+ * Minicard de un torneo en la ficha de empresa.
+ * El destino público es siempre Chapi. El dashboard es atajo de miembro.
+ */
+import { isIndividualSport } from '@parches/config';
+import type { TournamentWithMatches } from '../../data/mock';
+import { orgDashPath } from '../../lib/orgDash';
+
+interface Props {
+  tournament: TournamentWithMatches;
+  orgSlug: string;
+  canManage?: boolean;
+}
+
+const { tournament: t, orgSlug, canManage = false } = Astro.props;
+
+const STATUS_LABEL: Record<string, string> = {
+  LIVE: 'En vivo',
+  UPCOMING: 'Próximo',
+  FINISHED: 'Cerrado',
+};
+
+const SPORT_LABEL: Record<string, string> = {
+  football: 'Fútbol',
+  basketball: 'Baloncesto',
+  tennis: 'Tenis',
+  volleyball: 'Voleibol',
+  baseball: 'Béisbol',
+  hockey: 'Hockey',
+  motor: 'Motor',
+  padel: 'Pádel',
+  eSports: 'eSports',
+  boxeo: 'Boxeo',
+};
+
+const publicHref = `/tournaments/${t.slug}`;
+const dash = (op?: string) => orgDashPath(orgSlug, t.slug, op);
+const individual = isIndividualSport(t.sport);
+const countLabel = t.teamCount
+  ? `${t.teamCount} ${individual
+    ? (t.teamCount === 1 ? 'jugador' : 'jugadores')
+    : (t.teamCount === 1 ? 'equipo' : 'equipos')}`
+  : null;
+const initials = t.name
+  .split(' ')
+  .filter(w => w.length > 2)
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('') || t.name.slice(0, 2).toUpperCase();
+---
+
+<article class="mini">
+  <a href={publicHref} class="mini__main">
+    <div class="mini__top">
+      <span class="mini__mark" aria-hidden="true">
+        {t.logoUrl
+          ? <img src={t.logoUrl} alt="" width="40" height="40" />
+          : initials}
+      </span>
+      <span class:list={['mini__status', `is-${t.status.toLowerCase()}`]}>
+        {STATUS_LABEL[t.status]}
+      </span>
+    </div>
+    <h3 class="mini__name">{t.name}</h3>
+    <p class="mini__meta">
+      {[SPORT_LABEL[t.sport] ?? t.sport, countLabel].filter(Boolean).join(' · ')}
+    </p>
+  </a>
+
+  <div class="mini__footer">
+    <a href={publicHref} class="mini__go">Ver en Chapi</a>
+    {canManage && (
+      <nav class="mini__shortcuts" aria-label={`Administrar ${t.name}`}>
+        <a href={dash()}>Ajustes</a>
+        <a href={dash('foro')}>Foro</a>
+        <a href={dash('operar')}>Operar</a>
+        <a href={dash('equipos')}>{individual ? 'Jugadores' : 'Equipos'}</a>
+      </nav>
+    )}
+  </div>
+</article>
+
+<style>
+.mini {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  min-height: 148px;
+  transition: border-color var(--transition);
+}
+.mini:hover { border-color: var(--border-hover); }
+.mini__main { text-decoration: none; flex: 1; }
+.mini__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mini__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.mini__mark img { width: 100%; height: 100%; object-fit: cover; }
+.mini__status {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.mini__status.is-live { color: var(--live); }
+.mini__status.is-upcoming { color: var(--accent); }
+.mini__status.is-finished { color: var(--text-muted); }
+.mini__name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin: 10px 0 4px;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.mini__meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.mini__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.mini__shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mini__shortcuts a {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.mini__shortcuts a:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.mini__go {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.mini__go:hover { text-decoration: underline; }
+</style>

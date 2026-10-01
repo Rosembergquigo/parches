@@ -5,6 +5,7 @@
  * clasificados. No sabe nada de tabs ni de grupos, solo renderiza filas.
  */
 import type { StandingsRow } from '../../data/mock';
+import TeamCrest from '../team/TeamCrest.astro';
 
 interface RowWithGroup extends StandingsRow {
   groupLabel?: string;
@@ -74,7 +75,9 @@ const isBasket = sport === 'basketball';
             </td>
             <td class="col-team">
               <a href={`/teams/${row.team.id}`} class="team-cell-link" aria-label={`Ver equipo ${row.team.name}`}>
-                <div class="team-logo" aria-hidden="true">{row.team.shortName}</div>
+                <span class="team-logo">
+                  <TeamCrest shortName={row.team.shortName} logoUrl={row.team.logoUrl} />
+                </span>
                 <span class="team-name">{row.team.name}</span>
               </a>
             </td>
@@ -135,7 +138,6 @@ thead th {
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
   padding: 10px 12px;
   text-align: center;
@@ -215,7 +217,6 @@ thead .col-team { text-align: left; }
   font-size: 0.56rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-muted);
   background: var(--bg-raised);
   border: 1px solid var(--border);
@@ -235,27 +236,40 @@ thead .col-team { text-align: left; }
 .team-cell-link:hover { opacity: 0.75; }
 .team-cell-link:hover .team-name { color: var(--accent); }
 .team-logo {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   border-radius: 4px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
-  font-size: 0.48rem;
-  font-weight: 800;
+  overflow: hidden;
   color: var(--text-secondary);
-  flex-shrink: 0;
-  letter-spacing: 0;
+}
+.team-logo :global(.crest) {
+  width: 100%;
+  height: 100%;
+}
+.team-logo :global(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  padding: 1px;
+  box-sizing: border-box;
+}
+.team-logo :global(.crest__abbr) {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  font-weight: 800;
 }
 .team-name {
   font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--text-primary);
   white-space: nowrap;
 }

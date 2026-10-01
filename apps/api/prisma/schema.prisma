@@ -18,6 +18,14 @@ model User {
   role      UserRole @default(VIEWER)
   avatarUrl String?
   bio       String?
+  // Color de marca personal (#rrggbb). En tenis pinta el cuadro.
+  color     String?
+  // Hash scrypt (`scrypt:salt:key`). Ausente si el usuario lo creó un
+  // capitán/organizador y todavía no eligió clave en el primer ingreso.
+  passwordHash String?
+  // Celular de contacto. Obligatorio para el capitán de un equipo;
+  // opcional en el resto de perfiles hasta que se inscriban como jugadores.
+  phone     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,6 +35,8 @@ model User {
   // Membresías en empresas. Organizar no cambia User.role — una persona
   // puede ser VIEWER/PLAYER y a la vez OWNER de una Organization.
   memberships OrganizationMember[]
+  tournamentPosts TournamentPost[]
+  captainedTeams  Team[]         @relation("teamCaptain")
 }
 
 enum UserRole {
@@ -104,9 +114,11 @@ model PlayerProfile {
 
 // ─────────────────────────────────────────────────────────────
 // PLAYER ENROLLMENT
-// Un jugador puede estar en EQUIPO_A del TORNEO_1 y en
-// EQUIPO_B del TORNEO_2. La combinación (player, team, tournament)
-// es única — no puede estar dos veces en el mismo equipo del mismo torneo.
+// Un jugador puede estar en EQUIPO_A del TORNEO_1 y en EQUIPO_B
+// del TORNEO_2 (incluso si son deportes distintos y coinciden en
+// fechas). No puede estar en dos equipos del MISMO torneo.
+// Unique (player, tournament) — el id de negocio del jugador es
+// User.email; el id técnico sigue siendo UUID.
 // ─────────────────────────────────────────────────────────────
 
 model PlayerEnrollment {
@@ -125,7 +137,8 @@ model PlayerEnrollment {
   // Stats del jugador en este torneo
   tournamentStats PlayerTournamentStat?
 
-  @@unique([playerProfileId, teamId, tournamentId])
+  @@unique([playerProfileId, tournamentId])
+  @@index([teamId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -206,6 +219,7 @@ model Tournament {
   groups      Group[]
   matches     Match[]
   enrollments PlayerEnrollment[]
+  posts       TournamentPost[]
 
   @@index([organizationId])
 }
@@ -251,9 +265,20 @@ model Team {
   groupId      String?
   group        Group?     @relation(fields: [groupId], references: [id])
 
+  // Capitán de contacto (nombre, correo, celular). Puede existir sin
+  // cuenta; si el correo coincide con un User, captainUserId lo enlaza.
+  // Nullable por equipos ya creados; el alta de plantilla lo exigirá.
+  captainName   String?
+  captainEmail  String?
+  captainPhone  String?
+  captainUserId String?
+  captainUser   User?   @relation("teamCaptain", fields: [captainUserId], references: [id], onDelete: SetNull)
+
   homeMatches Match[]            @relation("homeTeam")
   awayMatches Match[]            @relation("awayTeam")
   enrollments PlayerEnrollment[]
+
+  @@index([captainUserId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -287,6 +312,9 @@ model Match {
   referee      User?       @relation("referee", fields: [refereeId], references: [id])
   startedAt    DateTime?
   scheduledAt  DateTime?
+  // Cuando se mandó el recordatorio de 24 h. Null = pendiente.
+  // Se limpia si el organizador reprograma.
+  kickoffRemindedAt DateTime?
   createdAt    DateTime    @default(now())
 
   events      MatchEvent[]
@@ -316,4 +344,35 @@ model MatchEvent {
   payload     Json?
   refereeId   String? // quién registró el evento
   createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// TOURNAMENT POST (foro / blog oficial del campeonato)
+// Lo publica un editor de la empresa. La ficha pública del
+// torneo lista estos posts en Noticias & Foro.
+// ─────────────────────────────────────────────────────────────
+
+enum TournamentPostCategory {
+  COMUNICADO
+  NOTICIA
+  ANUNCIO
+}
+
+model TournamentPost {
+  id            String                  @id @default(uuid())
+  tournamentId  String
+  tournament    Tournament              @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User                    @relation(fields: [authorId], references: [id])
+  category      TournamentPostCategory  @default(NOTICIA)
+  title         String
+  body          String
+  excerpt       String?
+  coverImageUrl String?
+  imageUrls     String[]
+  pinned        Boolean                 @default(false)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([tournamentId, createdAt])
 }

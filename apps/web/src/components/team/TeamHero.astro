@@ -11,7 +11,8 @@ interface Props {
 }
 
 const { team } = Astro.props;
-const { name, shortName, sport, tournamentName, tournamentSlug, brandColor, standing, logoUrl } = team;
+const { name, shortName, sport, tournamentName, tournamentSlug, brandColor, color, standing, logoUrl } = team;
+const accent = color || brandColor;
 
 const sportGradient: Record<string, string> = {
   football:   'linear-gradient(135deg, #0a1e12 0%, #0d2b1a 50%, #0a0c0f 100%)',
@@ -22,12 +23,12 @@ const sportGradient: Record<string, string> = {
   hockey:     'linear-gradient(135deg, #0e0a1e 0%, #160d2e 50%, #0a0c0f 100%)',
 };
 
-const bgGradient = brandColor
-  ? `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}11 45%, #0a0c0f 100%)`
+const bgGradient = accent
+  ? `linear-gradient(135deg, ${accent}22 0%, ${accent}11 45%, #0a0c0f 100%)`
   : (sportGradient[sport] ?? sportGradient.football);
 
-const logoBg = brandColor ?? '#1e232b';
-const isLight = brandColor ? parseInt(brandColor.slice(1), 16) > 0x888888 : false;
+const logoBg = accent ?? '#1e232b';
+const isLight = accent ? parseInt(accent.slice(1), 16) > 0x888888 : false;
 const logoTextColor = brandColor && isLight ? '#000' : '#fff';
 
 const sportLabel: Record<string, string> = {
@@ -66,15 +67,15 @@ const sportLabel: Record<string, string> = {
         <div class="team-hero__badges">
           <span
             class="team-hero__sport"
-            style={brandColor
-              ? `color:${brandColor}; border-color:${brandColor}44; background:${brandColor}14;`
+            style={accent
+              ? `color:${accent}; border-color:${accent}44; background:${accent}14;`
               : ''}
           >
-            <SportIcon sport={sport} size={12} stroke={brandColor ?? 'var(--accent)'} />
+            <SportIcon sport={sport} size={12} stroke={accent ?? 'var(--accent)'} />
             {sportLabel[sport] ?? sport}
           </span>
           {standing && (
-            <span class="team-hero__pos" style={brandColor ? `color:${brandColor}` : ''}>
+            <span class="team-hero__pos" style={accent ? `color:${accent}` : ''}>
               #{standing.position} · {standing.points} PTS
             </span>
           )}
@@ -91,7 +92,8 @@ const sportLabel: Record<string, string> = {
 <style>
 .team-hero {
   position: relative;
-  min-height: 180px;
+  min-height: calc(180px + var(--nav-offset));
+  margin-top: calc(-1 * var(--nav-offset));
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -106,8 +108,25 @@ const sportLabel: Record<string, string> = {
 }
 .team-hero__fade {
   position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(10,12,15,0.95) 0%, transparent 60%);
+  background: linear-gradient(
+    to top,
+    var(--bg-base) 0%,
+    rgba(23, 23, 27, 0.88) 30%,
+    rgba(23, 23, 27, 0.4) 60%,
+    transparent 84%
+  );
   pointer-events: none;
+}
+.team-hero::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 72px;
+  background: linear-gradient(to bottom, transparent, var(--bg-base) 70%, var(--bg-base));
+  pointer-events: none;
+  z-index: 1;
 }
 .team-hero__content {
   position: relative;
@@ -115,7 +134,7 @@ const sportLabel: Record<string, string> = {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 28px 28px 24px;
+  padding: calc(var(--nav-offset) + 12px) 28px 24px;
 }
 .team-hero__breadcrumb {
   display: flex;
@@ -126,7 +145,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-muted);
   flex-wrap: wrap;
 }
@@ -163,7 +181,7 @@ const sportLabel: Record<string, string> = {
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  object-fit: contain;
+  object-fit: cover;
   border: 1px solid rgba(255,255,255,0.12);
   flex-shrink: 0;
 }
@@ -183,7 +201,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid rgba(0,229,255,.3);
@@ -195,7 +212,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -206,7 +222,6 @@ const sportLabel: Record<string, string> = {
   font-size: clamp(1.4rem, 3.5vw, 2.2rem);
   font-weight: 900;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   color: var(--text-primary);
   line-height: 1.05;
   margin-bottom: 6px;
@@ -216,7 +231,6 @@ const sportLabel: Record<string, string> = {
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 .team-hero__tournament a {
@@ -225,4 +239,7 @@ const sportLabel: Record<string, string> = {
   transition: color var(--transition);
 }
 .team-hero__tournament a:hover { color: var(--text-primary); }
+@media (max-width: 768px) {
+  .team-hero__content { padding-left: 20px; padding-right: 20px; }
+}
 </style>

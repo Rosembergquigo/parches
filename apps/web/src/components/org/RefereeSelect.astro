@@ -1,0 +1,74 @@
+---
+/**
+ * Dropdown de árbitro. Mismo control visual que Sede.
+ */
+import type { RefereeOption } from '../../lib/api';
+
+interface Props {
+  referees: RefereeOption[];
+  value?: string | null;
+  extra?: RefereeOption | null;
+  name?: string;
+  id?: string;
+  emptyLabel?: string;
+}
+
+const {
+  referees,
+  value = '',
+  extra = null,
+  name = 'refereeId',
+  id,
+  emptyLabel = 'Sin árbitro',
+} = Astro.props;
+
+const current = (value ?? '').trim();
+const options = extra && !referees.some(r => r.id === extra.id)
+  ? [...referees, extra]
+  : referees;
+---
+
+<div class="ref-select">
+  <select name={name} id={id} class="ref-select__input">
+    <option value="">{emptyLabel}</option>
+    {options.map(r => (
+      <option value={r.id} selected={r.id === current}>{r.name}</option>
+    ))}
+  </select>
+  <svg class="ref-select__arrow" width="10" height="10" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+</div>
+
+<style>
+.ref-select {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.ref-select__input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 8px 28px 8px 10px;
+  outline: none;
+  cursor: pointer;
+}
+.ref-select__input:focus { border-color: var(--accent); }
+.ref-select__arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+</style>

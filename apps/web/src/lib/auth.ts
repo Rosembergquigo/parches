@@ -15,7 +15,8 @@
 
 import { jwtVerify } from 'jose';
 import type { AstroGlobal } from 'astro';
-import { api, ApiError } from './api';
+import { api, ApiError, getOrganization } from './api';
+import type { OrganizationDetail } from '../data/mock';
 
 // ── Tipos ────────────────────────────────────────────────────
 
@@ -24,6 +25,10 @@ export interface AuthUser {
   email: string;
   name: string;
   role: 'VIEWER' | 'PLAYER' | 'REFEREE' | 'ORGANIZER' | 'ADMIN';
+  isCaptain?: boolean;
+  avatarUrl?: string | null;
+  color?: string | null;
+  hasPassword?: boolean;
 }
 
 export interface JwtPayload {
@@ -80,6 +85,51 @@ export async function requireAuth(astro: AstroGlobal): Promise<AuthUser | Respon
     }
     throw err;
   }
+}
+
+/**
+ * Auth + membresía de escritura en la empresa del param `slug`.
+ * Si no es miembro, redirige a la ficha pública.
+ */
+export async function requireOrgEditor(
+  astro: AstroGlobal
+): Promise<{ org: OrganizationDetail } | Response> {
+  const user = await requireAuth(astro);
+  if (user instanceof Response) return user;
+
+  const slug = astro.params.slug;
+  if (!slug) return astro.redirect('/404');
+
+  const org = await getOrganization(slug, astro.request);
+  if (!org) return astro.redirect('/404');
+  if (!org.myRole) return astro.redirect(`/orgs/${org.slug}`);
+  return { org };
+}
+
+/**
+ * Auth + OWNER/ADMIN de la empresa del param `slug`.
+ * EDITOR y no-miembros van a la ficha pública.
+ */
+export async function requireOrgAdmin(
+  astro: AstroGlobal
+): Promise<{ org: OrganizationDetail } | Response> {
+  const gate = await requireOrgEditor(astro);
+  if (gate instanceof Response) return gate;
+  if (gate.org.myRole !== 'OWNER' && gate.org.myRole !== 'ADMIN') {
+    return astro.redirect(`/orgs/${gate.org.slug}`);
+  }
+  return gate;
+}
+
+/**
+ * Destino post-login. Solo rutas relativas internas (`/foo`).
+ * Conserva query (`/tournaments/x?inscribir=1`).
+ */
+export function safeNextPath(raw: string | null | undefined): string {
+  if (!raw) return '/';
+  const v = raw.trim();
+  if (!v.startsWith('/') || v.startsWith('//')) return '/';
+  return v;
 }
 
 /**

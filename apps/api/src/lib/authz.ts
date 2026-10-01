@@ -41,3 +41,55 @@ export async function requireTournamentEditor(
 ): Promise<boolean> {
   return requireOrgRole(req, reply, organizationId, ORG_WRITE_ROLES);
 }
+
+export type TeamRosterRole = 'editor' | 'captain';
+
+type TeamRosterSubject = {
+  id: string;
+  captainUserId: string | null;
+  captainEmail: string | null;
+  tournament: { organizationId: string };
+};
+
+/**
+ * Editor de la empresa o capitán del equipo (por userId o correo).
+ * Si el correo coincide y aún no hay enlace, rellena captainUserId.
+ */
+export async function requireTeamRosterAccess(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  team: TeamRosterSubject
+): Promise<TeamRosterRole | null> {
+  const userId = userIdFrom(req);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true },
+  });
+  if (!user) {
+    reply.status(401).send({ error: 'Unauthorized' });
+    return null;
+  }
+
+  const member = await prisma.organizationMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId: team.tournament.organizationId } },
+  });
+  const editor = !!member && ORG_WRITE_ROLES.includes(member.role);
+  const email = user.email.trim().toLowerCase();
+  const captain =
+    team.captainUserId === userId ||
+    (!!team.captainEmail && team.captainEmail.trim().toLowerCase() === email);
+
+  if (!editor && !captain) {
+    reply.status(403).send({ error: 'Not allowed to manage this team' });
+    return null;
+  }
+
+  if (captain && team.captainUserId !== userId) {
+    await prisma.team.update({
+      where: { id: team.id },
+      data: { captainUserId: userId },
+    });
+  }
+
+  return editor ? 'editor' : 'captain';
+}

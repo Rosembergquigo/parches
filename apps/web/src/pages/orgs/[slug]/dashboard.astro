@@ -1,0 +1,1165 @@
+---
+/**
+ * Ajustes del torneo seleccionado. El listado vive en /orgs/[slug].
+ * ?t=slug del campeonato · ?op=resumen|foro|operar|equipos
+ */
+import Base from '../../../layouts/Base.astro';
+import OperateMatches from '../../../components/org/OperateMatches.astro';
+import ManageTeams from '../../../components/org/ManageTeams.astro';
+import { requireOrgEditor } from '../../../lib/auth';
+import { isIndividualSport } from '@parches/config';
+import {
+  api,
+  ApiError,
+  addTeamPlayer,
+  getReferees,
+  getTournamentPosts,
+  listTeamEnrollments,
+  removeTeamPlayer,
+  updateTeamEnrollment,
+  uploadTeamLogo,
+  uploadTournamentLogo,
+  type TeamEnrollment,
+} from '../../../lib/api';
+import type { RawTournament } from '../../../lib/adapters';
+import { orgDashPath } from '../../../lib/orgDash';
+import { mediaUrl } from '../../../lib/media';
+
+const gate = await requireOrgEditor(Astro);
+if (gate instanceof Response) return gate;
+const { org } = gate;
+
+const tParam = Astro.url.searchParams.get('t');
+const tournament = org.tournaments.find(item => item.slug === tParam || item.id === tParam);
+if (!tournament) return Astro.redirect(`/orgs/${org.slug}`);
+
+type DashOp = 'resumen' | 'foro' | 'operar' | 'equipos';
+const OPS: DashOp[] = ['resumen', 'foro', 'operar', 'equipos'];
+const rawOp = Astro.url.searchParams.get('op');
+if (rawOp === 'fixture') {
+  return Astro.redirect(orgDashPath(org.slug, tournament.slug, 'equipos'));
+}
+const op: DashOp = OPS.includes(rawOp as DashOp) ? (rawOp as DashOp) : 'resumen';
+const individual = isIndividualSport(tournament.sport);
+
+const NAV: { id: DashOp; label: string; hint: string }[] = [
+  { id: 'resumen', label: 'Resumen', hint: 'Marca, fechas y estado' },
+  { id: 'foro', label: 'Foro', hint: 'Blog y comunicados' },
+  { id: 'operar', label: 'Operar', hint: 'Fechas, sede, árbitro y estado' },
+  {
+    id: 'equipos',
+    label: individual ? 'Jugadores' : 'Equipos',
+    hint: individual ? 'Alta de uno' : 'Escudo, plantilla y capitán',
+  },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  LIVE: 'En vivo',
+  UPCOMING: 'Próximo',
+  FINISHED: 'Cerrado',
+};
+
+const SPORT_LABEL: Record<string, string> = {
+  football: 'Fútbol',
+  basketball: 'Baloncesto',
+  tennis: 'Tenis',
+  volleyball: 'Voleibol',
+  baseball: 'Béisbol',
+  hockey: 'Hockey',
+  motor: 'Motor',
+  padel: 'Pádel',
+  eSports: 'eSports',
+  boxeo: 'Boxeo',
+};
+
+const tSlug = tournament.slug;
+const dashFor = (next: DashOp) => orgDashPath(org.slug, tSlug, next);
+const blogPath = `/orgs/${org.slug}/tournaments/${tSlug}/blog`;
+const fixturePath = `/orgs/${org.slug}/tournaments/${tSlug}/fixture`;
+
+function fromDatetimeLocal(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  return v.length === 16 ? `${v}:00.000Z` : new Date(v).toISOString();
+}
+
+function toDateInput(iso?: string | null): string {
+  if (!iso) return '';
+  return String(iso).slice(0, 10);
+}
+
+function readTeamFields(form: FormData) {
+  const name = String(form.get('name') ?? '').trim();
+  const shortName = String(form.get('shortName') ?? '').trim().toUpperCase();
+  const color = String(form.get('color') ?? '').trim();
+  const groupId = String(form.get('groupId') ?? '').trim() || null;
+  const captainName = individual
+    ? name
+    : String(form.get('captainName') ?? '').trim();
+  const captainEmail = String(form.get('captainEmail') ?? '').trim().toLowerCase();
+  const captainPhone = String(form.get('captainPhone') ?? '').trim();
+  if (!name) {
+    return { error: individual ? 'El nombre del jugador es obligatorio' : 'El nombre del equipo es obligatorio' };
+  }
+  if (shortName && !/^[A-Z0-9]{2,4}$/.test(shortName)) {
+    return { error: 'La abreviación debe tener 2–4 letras o números' };
+  }
+  if (!individual && !/^[A-Z0-9]{2,4}$/.test(shortName)) {
+    return { error: 'La abreviación debe tener 2–4 letras o números' };
+  }
+  if (!captainName || !captainEmail || !captainPhone) {
+    return {
+      error: individual
+        ? 'Cada jugador necesita correo y celular'
+        : 'Cada equipo necesita un capitán con nombre, correo y celular',
+    };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(captainEmail)) {
+    return { error: individual ? 'El correo del jugador no es válido' : 'El correo del capitán no es válido' };
+  }
+  return {
+    name,
+    shortName: shortName || undefined,
+    color: color || undefined,
+    groupId,
+    captainName,
+    captainEmail,
+    captainPhone,
+  };
+}
+
+function parseJerseyField(form: FormData): { jerseyNumber: number | null } | { error: string } {
+  const raw = String(form.get('jerseyNumber') ?? '').trim();
+  if (!raw) return { jerseyNumber: null };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 99) {
+    return { error: 'El dorsal debe ser un entero entre 0 y 99' };
+  }
+  return { jerseyNumber: n };
+}
+
+async function logoFromForm(form: FormData, request: Request): Promise<string | null | undefined> {
+  if (String(form.get('clearLogo') ?? '') === '1') return null;
+  const file = form.get('logo');
+  if (file instanceof File && file.size > 0) {
+    return uploadTeamLogo(file, request);
+  }
+  return undefined;
+}
+
+async function tournamentLogoFromForm(form: FormData, request: Request): Promise<string | null | undefined> {
+  const file = form.get('logo');
+  if (file instanceof File && file.size > 0) {
+    return uploadTournamentLogo(file, request);
+  }
+  if (String(form.get('clearLogo') ?? '') === '1') return null;
+  return undefined;
+}
+
+async function tournamentCoverFromForm(form: FormData, request: Request): Promise<string | null | undefined> {
+  const file = form.get('cover');
+  if (file instanceof File && file.size > 0) {
+    return uploadTournamentLogo(file, request);
+  }
+  if (String(form.get('clearCover') ?? '') === '1') return null;
+  const url = String(form.get('backgroundImageUrl') ?? '').trim();
+  if (url) return url;
+  return undefined;
+}
+
+const posts = op === 'foro' ? await getTournamentPosts(tSlug, Astro.request) : [];
+const referees = op === 'operar' ? await getReferees(Astro.request) : [];
+const needsFixture = tournament.matches.length === 0;
+
+let operateError: string | null = null;
+let teamsError: string | null = null;
+let resumenError: string | null = null;
+const operateSaved = Astro.url.searchParams.get('ok') === '1';
+const resumenSaved = op === 'resumen' && operateSaved;
+let operateTournament: RawTournament | null = null;
+let teamsTournament: RawTournament | null = null;
+let resumenTournament: RawTournament | null = null;
+
+let resumenName = tournament.name;
+let resumenStatus = tournament.status;
+let resumenStart = '';
+let resumenEnd = '';
+let resumenColor = org.brandColor ?? '';
+let resumenDescription = '';
+let resumenLogo = tournament.logoUrl ?? '';
+let resumenCover = '';
+let resumenCoverUrl = '';
+
+if (op === 'resumen') {
+  try {
+    resumenTournament = await api.get<RawTournament>(`/tournaments/${tSlug}`, Astro.request);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return Astro.redirect(`/orgs/${org.slug}`);
+    throw err;
+  }
+
+  resumenName = resumenTournament.name;
+  resumenStatus = resumenTournament.status;
+  resumenStart = toDateInput(resumenTournament.startDate);
+  resumenEnd = toDateInput(resumenTournament.endDate);
+  resumenColor = resumenTournament.brandColor ?? org.brandColor ?? '';
+  resumenDescription = resumenTournament.description ?? '';
+  resumenLogo = resumenTournament.logoUrl ?? '';
+  resumenCover = resumenTournament.backgroundImageUrl ?? '';
+  resumenCoverUrl = /^https?:\/\//i.test(resumenCover) ? resumenCover : '';
+
+  if (Astro.request.method === 'POST') {
+    const form = await Astro.request.formData();
+    resumenName = String(form.get('name') ?? '').trim();
+    resumenStatus = String(form.get('status') ?? resumenStatus) as typeof resumenStatus;
+    resumenStart = String(form.get('startDate') ?? '').trim();
+    resumenEnd = String(form.get('endDate') ?? '').trim();
+    resumenColor = String(form.get('brandColor') ?? '').trim();
+    resumenDescription = String(form.get('description') ?? '').trim();
+    resumenCoverUrl = String(form.get('backgroundImageUrl') ?? '').trim();
+
+    const back = `${dashFor('resumen')}&ok=1`;
+    try {
+      if (!resumenName) throw new Error('El nombre es obligatorio');
+      if (!resumenStart || !resumenEnd) throw new Error('Las fechas de inicio y fin son obligatorias');
+      if (resumenStart > resumenEnd) throw new Error('La fecha de inicio no puede ser posterior al fin');
+      if (!['UPCOMING', 'LIVE', 'FINISHED'].includes(resumenStatus)) {
+        throw new Error('El estado no es válido');
+      }
+
+      const logoUrl = await tournamentLogoFromForm(form, Astro.request);
+      const backgroundImageUrl = await tournamentCoverFromForm(form, Astro.request);
+
+      await api.patch(
+        `/tournaments/${tSlug}`,
+        {
+          name: resumenName,
+          status: resumenStatus,
+          startDate: `${resumenStart}T12:00:00.000Z`,
+          endDate: `${resumenEnd}T12:00:00.000Z`,
+          brandColor: resumenColor || null,
+          description: resumenDescription || null,
+          ...(logoUrl !== undefined ? { logoUrl } : {}),
+          ...(backgroundImageUrl !== undefined ? { backgroundImageUrl } : {}),
+        },
+        Astro.request
+      );
+      return Astro.redirect(back);
+    } catch (err: unknown) {
+      resumenError = err instanceof Error ? err.message : 'No se pudo guardar';
+    }
+  }
+}
+
+if (op === 'operar') {
+  try {
+    operateTournament = await api.get<RawTournament>(`/tournaments/${tSlug}`, Astro.request);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return Astro.redirect(`/orgs/${org.slug}`);
+    throw err;
+  }
+
+  if (Astro.request.method === 'POST' && operateTournament) {
+    const form = await Astro.request.formData();
+    const intent = String(form.get('intent') ?? '');
+    const back = `${dashFor('operar')}&ok=1`;
+    try {
+      if (intent === 'update') {
+        const matchId = String(form.get('matchId') ?? '');
+        await api.patch(
+          `/matches/${matchId}`,
+          {
+            scheduledAt: fromDatetimeLocal(String(form.get('scheduledAt') ?? '')),
+            venue: String(form.get('venue') ?? '').trim() || null,
+            stage: String(form.get('stage') ?? '').trim() || null,
+            status: String(form.get('status') ?? 'SCHEDULED'),
+            refereeId: String(form.get('refereeId') ?? '').trim() || null,
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'create') {
+        const created = await api.post<{ id: string }>(
+          `/tournaments/${operateTournament.id}/matches`,
+          {
+            homeTeamId: String(form.get('homeTeamId') ?? ''),
+            awayTeamId: String(form.get('awayTeamId') ?? ''),
+            scheduledAt: fromDatetimeLocal(String(form.get('scheduledAt') ?? '')) ?? undefined,
+            venue: String(form.get('venue') ?? '').trim() || undefined,
+            stage: String(form.get('stage') ?? '').trim() || undefined,
+            refereeId: String(form.get('refereeId') ?? '').trim() || undefined,
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${created.id}`);
+      }
+
+      if (intent === 'delete') {
+        const matchId = String(form.get('matchId') ?? '');
+        await api.delete(`/matches/${matchId}`, Astro.request);
+        return Astro.redirect(back);
+      }
+    } catch (err: unknown) {
+      operateError = err instanceof Error ? err.message : 'No se pudo guardar';
+    }
+
+    try {
+      operateTournament = await api.get<RawTournament>(`/tournaments/${tSlug}`, Astro.request);
+    } catch {
+      /* keep previous */
+    }
+  }
+}
+
+if (op === 'equipos') {
+  try {
+    teamsTournament = await api.get<RawTournament>(`/tournaments/${tSlug}`, Astro.request);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return Astro.redirect(`/orgs/${org.slug}`);
+    throw err;
+  }
+
+  if (Astro.request.method === 'POST' && teamsTournament) {
+    const form = await Astro.request.formData();
+    const intent = String(form.get('intent') ?? '');
+    const back = `${dashFor('equipos')}&ok=1`;
+    try {
+      if (intent === 'update') {
+        const teamId = String(form.get('teamId') ?? '');
+        const fields = readTeamFields(form);
+        if ('error' in fields) {
+          teamsError = fields.error;
+        } else {
+          const logoUrl = individual ? undefined : await logoFromForm(form, Astro.request);
+          await api.patch(
+            `/teams/${teamId}`,
+            {
+              name: fields.name,
+              shortName: fields.shortName,
+              ...(individual ? {} : { color: fields.color }),
+              groupId: fields.groupId,
+              captainName: fields.captainName,
+              captainEmail: fields.captainEmail,
+              captainPhone: fields.captainPhone,
+              ...(logoUrl !== undefined ? { logoUrl } : {}),
+            },
+            Astro.request
+          );
+          return Astro.redirect(`${back}#tm-${teamId}`);
+        }
+      }
+
+      if (intent === 'create') {
+        const fields = readTeamFields(form);
+        if ('error' in fields) {
+          teamsError = fields.error;
+        } else {
+          const logoUrl = individual ? undefined : await logoFromForm(form, Astro.request);
+          const created = await api.post<{ id: string }>(
+            `/tournaments/${teamsTournament.id}/teams`,
+            {
+              name: fields.name,
+              shortName: fields.shortName,
+              ...(individual ? {} : { color: fields.color }),
+              groupId: fields.groupId ?? undefined,
+              captainName: fields.captainName,
+              captainEmail: fields.captainEmail,
+              captainPhone: fields.captainPhone,
+              ...(logoUrl ? { logoUrl } : {}),
+            },
+            Astro.request
+          );
+          return Astro.redirect(`${back}#tm-${created.id}`);
+        }
+      }
+
+      if (intent === 'delete') {
+        const teamId = String(form.get('teamId') ?? '');
+        await api.delete(`/teams/${teamId}`, Astro.request);
+        return Astro.redirect(back);
+      }
+
+      if (intent === 'enroll' || intent === 'reactivatePlayer') {
+        if (individual) {
+          teamsError = 'En tenis no hay plantilla: el jugador es el único inscrito';
+        } else {
+        const teamId = String(form.get('teamId') ?? '');
+        const email = String(form.get('email') ?? '').trim();
+        const name = String(form.get('name') ?? '').trim();
+        const phone = String(form.get('phone') ?? '').trim();
+        const position = String(form.get('position') ?? '').trim();
+        const jersey = parseJerseyField(form);
+        if ('error' in jersey) {
+          teamsError = jersey.error;
+        } else if (!email) {
+          teamsError = 'El correo es obligatorio';
+        } else {
+          const payload: Parameters<typeof addTeamPlayer>[1] = { email };
+          if (name) payload.name = name;
+          if (phone) payload.phone = phone;
+          if (position) payload.position = position;
+          if (jersey.jerseyNumber !== null) payload.jerseyNumber = jersey.jerseyNumber;
+          else if (intent === 'enroll') payload.jerseyNumber = null;
+          await addTeamPlayer(teamId, payload, Astro.request);
+          return Astro.redirect(`${back}#tm-${teamId}`);
+        }
+        }
+      }
+
+      if (intent === 'updatePlayer') {
+        if (individual) {
+          teamsError = 'En tenis no hay plantilla: el jugador es el único inscrito';
+        } else {
+        const teamId = String(form.get('teamId') ?? '');
+        const enrollmentId = String(form.get('enrollmentId') ?? '');
+        const name = String(form.get('name') ?? '').trim();
+        const phone = String(form.get('phone') ?? '').trim();
+        const position = String(form.get('position') ?? '').trim();
+        const jersey = parseJerseyField(form);
+        if ('error' in jersey) {
+          teamsError = jersey.error;
+        } else if (!name) {
+          teamsError = 'El nombre no puede quedar vacío';
+        } else {
+          await updateTeamEnrollment(
+            teamId,
+            enrollmentId,
+            {
+              name,
+              phone: phone || null,
+              jerseyNumber: jersey.jerseyNumber,
+              position: position || null,
+            },
+            Astro.request
+          );
+          return Astro.redirect(`${back}#pl-${enrollmentId}`);
+        }
+        }
+      }
+
+      if (intent === 'removePlayer') {
+        if (individual) {
+          teamsError = 'En tenis no hay plantilla: el jugador es el único inscrito';
+        } else {
+          const teamId = String(form.get('teamId') ?? '');
+          const enrollmentId = String(form.get('enrollmentId') ?? '');
+          await removeTeamPlayer(teamId, enrollmentId, Astro.request);
+          return Astro.redirect(`${back}#tm-${teamId}`);
+        }
+      }
+    } catch (err: unknown) {
+      teamsError = err instanceof Error ? err.message : 'No se pudo guardar';
+    }
+
+    try {
+      teamsTournament = await api.get<RawTournament>(`/tournaments/${tSlug}`, Astro.request);
+    } catch {
+      /* keep previous */
+    }
+  }
+}
+
+let rosterByTeam: Record<string, TeamEnrollment[]> = {};
+if (op === 'equipos' && teamsTournament && !individual) {
+  const entries = await Promise.all(
+    (teamsTournament.teams ?? []).map(async team => {
+      try {
+        const rows = await listTeamEnrollments(team.id, Astro.request);
+        return [team.id, rows] as const;
+      } catch {
+        return [team.id, [] as TeamEnrollment[]] as const;
+      }
+    })
+  );
+  rosterByTeam = Object.fromEntries(entries);
+}
+
+const resumenColorValid = /^#[0-9A-Fa-f]{6}$/.test(resumenColor);
+const resumenSwatch = resumenColorValid ? resumenColor : (org.brandColor || '#00e5ff');
+const resumenInitials =
+  resumenName.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || 'T';
+---
+
+<Base
+  title={`Ajustes · ${tournament.name} | Chapi`}
+  description={`Ajustes de ${tournament.name} en ${org.name}.`}
+  noIndex={true}
+>
+  <header class="dash-hero">
+    <div class="dash-hero__inner">
+      <div>
+        <p class="dash-hero__kicker">
+          <a href={`/orgs/${org.slug}`}>{org.name}</a>
+        </p>
+        <h1 class="dash-hero__name">{tournament.name}</h1>
+        <p class="dash-hero__meta">
+          {STATUS_LABEL[tournament.status]}
+          {' · '}
+          {SPORT_LABEL[tournament.sport] ?? tournament.sport}
+          {tournament.teamCount ? ` · ${tournament.teamCount} ${individual ? (tournament.teamCount === 1 ? 'jugador' : 'jugadores') : 'equipos'}` : ''}
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <div class="dash">
+    <aside class="dash-nav" aria-label="Ajustes del torneo">
+      <p class="dash-nav__label">Ajustes</p>
+      <nav class="dash-nav__list">
+        {NAV.map(item => (
+          <a
+            href={dashFor(item.id)}
+            class:list={['dash-nav__item', op === item.id && 'dash-nav__item--on']}
+            aria-current={op === item.id ? 'page' : undefined}
+          >
+            <span class="dash-nav__name">{item.label}</span>
+            <span class="dash-nav__hint">{item.hint}</span>
+          </a>
+        ))}
+      </nav>
+      <div class="dash-nav__extra">
+        <a href={`/orgs/${org.slug}`} class="dash-nav__link">Todos los torneos</a>
+        <a href={`/tournaments/${tSlug}`} class="dash-nav__link">Ficha pública</a>
+        {(org.myRole === 'OWNER' || org.myRole === 'ADMIN') && (
+          <a href={`/orgs/${org.slug}/settings`} class="dash-nav__link">Ajustes de empresa</a>
+        )}
+      </div>
+    </aside>
+
+    <main class="dash-body">
+      {op === 'resumen' && resumenTournament && (
+        <>
+          <div class="dash-body__head">
+            <div>
+              <h2 class="dash-body__title">Resumen</h2>
+              <p class="dash-body__lead">Nombre, logo, portada, fechas y estado. Así se ve en la ficha pública.</p>
+            </div>
+            <a href={`/tournaments/${tSlug}`} class="btn-ghost dash-cta">Ver ficha pública</a>
+          </div>
+          {resumenError && <p class="dash-error" role="alert">{resumenError}</p>}
+          {resumenSaved && !resumenError && <p class="dash-ok">Cambios guardados.</p>}
+          <form method="POST" enctype="multipart/form-data" class="dash-form">
+            <div class="t-logo">
+              <label class="t-logo__mark" style={`--tm-color: ${resumenSwatch}`}>
+                {resumenLogo ? (
+                  <img src={mediaUrl(resumenLogo)} alt="" class="t-logo__img" />
+                ) : (
+                  <span>{resumenInitials}</span>
+                )}
+                <input type="file" name="logo" class="t-logo__file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                  aria-label={`Logo de ${resumenName}`} />
+              </label>
+              <div class="t-logo__copy">
+                <p class="t-logo__title">Logo del torneo</p>
+                <p class="t-logo__hint">Se ve en la ficha pública y en los correos. JPG, PNG, WEBP, GIF o SVG.</p>
+                {resumenLogo && (
+                  <label class="t-logo__clear">
+                    <input type="checkbox" name="clearLogo" value="1" />
+                    Quitar logo
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label class="label" for="name">Nombre</label>
+              <input type="text" id="name" name="name" required value={resumenName} class="form-input" />
+            </div>
+
+            <div class="dash-form__row">
+              <div class="form-field">
+                <label class="label" for="status">Estado</label>
+                <select id="status" name="status" required class="form-input">
+                  <option value="UPCOMING" selected={resumenStatus === 'UPCOMING'}>Próximo</option>
+                  <option value="LIVE" selected={resumenStatus === 'LIVE'}>En vivo</option>
+                  <option value="FINISHED" selected={resumenStatus === 'FINISHED'}>Cerrado</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="label" for="brandColor">Color de marca</label>
+                <div class="color-row">
+                  <input type="color" id="brandColorPicker"
+                    value={resumenSwatch}
+                    aria-label="Elegir color" />
+                  <input type="text" id="brandColor" name="brandColor"
+                    value={resumenColor} placeholder="#00e5ff"
+                    pattern="^#?[0-9A-Fa-f]{6}$" class="form-input" />
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-form__row">
+              <div class="form-field">
+                <label class="label" for="startDate">Inicio</label>
+                <input type="date" id="startDate" name="startDate" required
+                  value={resumenStart} class="form-input" />
+              </div>
+              <div class="form-field">
+                <label class="label" for="endDate">Fin</label>
+                <input type="date" id="endDate" name="endDate" required
+                  value={resumenEnd} class="form-input" />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label class="label" for="description">Descripción</label>
+              <textarea id="description" name="description" rows="4"
+                placeholder="Qué se juega, quién organiza, dónde…"
+                class="form-input form-input--area">{resumenDescription}</textarea>
+            </div>
+
+            <div class="t-cover">
+              <label class="t-cover__preview">
+                {resumenCover ? (
+                  <img src={mediaUrl(resumenCover)} alt="" class="t-cover__img" />
+                ) : (
+                  <span>Sin portada</span>
+                )}
+                <input type="file" name="cover" class="t-cover__file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                  aria-label="Portada del torneo" />
+              </label>
+              <div class="t-cover__copy">
+                <p class="t-logo__title">Portada</p>
+                <p class="t-logo__hint">Fondo del hero. Sube un archivo o pega una URL.</p>
+                <input type="url" id="backgroundImageUrl" name="backgroundImageUrl"
+                  value={resumenCoverUrl} placeholder="https://…" class="form-input" />
+                {resumenCover && (
+                  <label class="t-logo__clear" style="margin-top: 8px;">
+                    <input type="checkbox" name="clearCover" value="1" />
+                    Quitar portada
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div class="auth-actions">
+              <button type="submit" class="btn-accent dash-cta">Guardar</button>
+              <a href={`/tournaments/${tSlug}`} class="btn-ghost dash-cta">Ver ficha pública</a>
+            </div>
+          </form>
+          <ul class="dash-facts">
+            <li><span>Deporte</span> {SPORT_LABEL[resumenTournament.sport] ?? resumenTournament.sport}</li>
+            <li><span>{individual ? 'Jugadores' : 'Equipos'}</span> {resumenTournament.teams?.length ?? tournament.teamCount ?? 0}</li>
+            <li><span>Partidos</span> {resumenTournament.matches.length}</li>
+          </ul>
+        </>
+      )}
+
+      {op === 'foro' && (
+        <>
+          <div class="dash-body__head">
+            <div>
+              <h2 class="dash-body__title">Foro</h2>
+              <p class="dash-body__lead">Comunicados y noticias de {tournament.name}.</p>
+            </div>
+            <a href={blogPath} class="btn-accent dash-cta">Escribir</a>
+          </div>
+          {posts.length === 0 ? (
+            <p class="dash-empty">Todavía no hay posts. Escribe el primero.</p>
+          ) : (
+            <ul class="dash-list">
+              {posts.map(post => (
+                <li class="dash-card dash-card--row">
+                  <div class="dash-card__body">
+                    {post.coverImageUrl && (
+                      <img src={mediaUrl(post.coverImageUrl)} alt="" class="dash-card__thumb" />
+                    )}
+                    <div>
+                      <p class="dash-card__meta">{post.category}{post.pinned ? ' · Fijado' : ''}</p>
+                      <a href={`/tournaments/${tSlug}/news/${post.id}`} class="dash-card__name">{post.title}</a>
+                    </div>
+                  </div>
+                  <a href={`${blogPath}?edit=${post.id}`} class="btn-ghost dash-cta">Editar</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {op === 'operar' && operateTournament && (
+        <>
+          <div class="dash-body__head">
+            <div>
+              <h2 class="dash-body__title">Operar</h2>
+              <p class="dash-body__lead">Fechas, sede, árbitro y estado de los partidos.</p>
+            </div>
+          </div>
+          <OperateMatches
+            tournament={operateTournament}
+            referees={referees}
+            error={operateError}
+            saved={operateSaved}
+            fixtureHref={fixturePath}
+          />
+        </>
+      )}
+
+      {op === 'equipos' && teamsTournament && (
+        <>
+          <div class="dash-body__head">
+            <div>
+              <h2 class="dash-body__title">{individual ? 'Jugadores' : 'Equipos'}</h2>
+              <p class="dash-body__lead">
+                {individual
+                  ? `Alta de uno. Foto y color salen del perfil del jugador.`
+                  : `Escudo, plantilla y capitán de ${tournament.name}.`}
+              </p>
+            </div>
+            {needsFixture && !individual && (
+              <a href={fixturePath} class="btn-ghost dash-cta">Generar fixture</a>
+            )}
+          </div>
+          <ManageTeams
+            tournament={teamsTournament}
+            rosterByTeam={rosterByTeam}
+            error={teamsError}
+            saved={operateSaved}
+          />
+        </>
+      )}
+    </main>
+  </div>
+</Base>
+
+<style>
+.dash-hero {
+  padding: 28px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.dash-hero__inner {
+  max-width: none;
+  padding: 0 2vw;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dash-hero__kicker {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 0 0 2px;
+}
+.dash-hero__kicker a { color: var(--accent); }
+.dash-hero__name {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+.dash-hero__meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.dash {
+  display: grid;
+  grid-template-columns: 23vw minmax(0, 75vw);
+  column-gap: 2vw;
+  width: 100%;
+  margin: 0;
+  min-height: calc(100vh - var(--nav-offset) - 140px);
+}
+
+.dash-nav {
+  position: sticky;
+  top: var(--nav-offset);
+  align-self: start;
+  width: 23vw;
+  padding: 22px 16px 28px 24px;
+  border-right: 1px solid var(--border);
+  min-height: calc(100vh - var(--nav-offset) - 140px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-nav__label {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 8px 6px;
+}
+.dash-nav__list { display: flex; flex-direction: column; gap: 2px; }
+.dash-nav__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.dash-nav__item:hover { background: var(--bg-raised); }
+.dash-nav__item--on { background: var(--accent-dim); }
+.dash-nav__name {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+}
+.dash-nav__item--on .dash-nav__name { color: var(--accent); }
+.dash-nav__hint {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.dash-nav__extra {
+  margin-top: auto;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-nav__link {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+}
+.dash-nav__link:hover { color: var(--text-primary); background: var(--bg-raised); }
+
+.dash-body {
+  width: 75vw;
+  padding: 28px 28px 72px 0;
+}
+.dash-body__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.dash-body__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin: 0 0 6px;
+}
+.dash-body__lead {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0 0 22px;
+}
+.dash-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  margin: 0 0 14px;
+}
+.dash-ok {
+  color: var(--accent);
+  font-size: 0.85rem;
+  margin: 0 0 14px;
+}
+.t-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.t-logo__mark {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--tm-color) 22%, var(--bg-overlay));
+  color: var(--tm-color);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--tm-color) 45%, var(--border));
+}
+.t-logo__mark:hover { border-style: solid; }
+.t-logo__img { width: 100%; height: 100%; object-fit: contain; }
+.t-logo__file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.t-logo__copy { min-width: 0; flex: 1; }
+.t-logo__title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+.t-logo__hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+.t-logo__actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.t-logo__clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.dash-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0 0 22px;
+  max-width: 640px;
+}
+.dash-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+.form-input--area {
+  border-radius: var(--radius-lg);
+  resize: vertical;
+  min-height: 96px;
+}
+.form-input:focus { border-color: var(--accent); }
+.color-row { display: flex; align-items: center; gap: 10px; }
+.color-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.t-cover {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.t-cover__preview {
+  position: relative;
+  width: 168px;
+  height: 96px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--bg-raised);
+  border: 1px dashed var(--border);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.t-cover__preview:hover { border-style: solid; }
+.t-cover__img { width: 100%; height: 100%; object-fit: cover; }
+.t-cover__file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.t-cover__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dash-body__head .dash-body__lead { margin-bottom: 0; }
+.dash-cta { padding: 8px 16px; font-size: 0.78rem; flex-shrink: 0; }
+.dash-facts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.dash-facts li {
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+}
+.dash-facts span {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.dash-note {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+.dash-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.dash-card {
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.dash-card--row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dash-card--row .dash-card__body { flex: 1; min-width: 0; }
+.dash-card__body { display: flex; align-items: center; gap: 12px; }
+.dash-card__thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.dash-card__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+}
+.dash-card__meta {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+.dash-empty { color: var(--text-secondary); padding: 8px 0; }
+
+@media (max-width: 800px) {
+  .dash {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+    min-height: 0;
+  }
+  .dash-nav {
+    width: 100%;
+    position: sticky;
+    top: var(--nav-offset);
+    z-index: 20;
+    min-height: 0;
+    padding: 12px 16px 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-base);
+  }
+  .dash-nav__list { flex-direction: row; overflow-x: auto; gap: 4px; }
+  .dash-nav__item { min-width: max-content; }
+  .dash-nav__hint { display: none; }
+  .dash-nav__extra { flex-direction: row; margin-top: 8px; padding-top: 0; }
+  .dash-body { width: 100%; padding: 20px 16px 64px; }
+  .dash-form__row { grid-template-columns: 1fr; }
+  .t-cover { flex-direction: column; }
+  .t-cover__preview { width: 100%; }
+}
+</style>
+
+<script>
+  document.querySelectorAll<HTMLInputElement>('.t-logo__file').forEach(input => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const mark = input.closest('.t-logo__mark');
+      if (!mark) return;
+      const url = URL.createObjectURL(file);
+      let img = mark.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 't-logo__img';
+        mark.querySelector('span')?.remove();
+        mark.insertBefore(img, input);
+      }
+      img.src = url;
+      img.alt = '';
+    });
+  });
+
+  document.querySelectorAll<HTMLInputElement>('.t-cover__file').forEach(input => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const preview = input.closest('.t-cover__preview');
+      if (!preview) return;
+      const url = URL.createObjectURL(file);
+      let img = preview.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 't-cover__img';
+        preview.querySelector('span')?.remove();
+        preview.insertBefore(img, input);
+      }
+      img.src = url;
+      img.alt = '';
+    });
+  });
+
+  const picker = document.getElementById('brandColorPicker') as HTMLInputElement | null;
+  const text = document.getElementById('brandColor') as HTMLInputElement | null;
+  if (picker && text) {
+    picker.addEventListener('input', () => { text.value = picker.value; });
+    text.addEventListener('input', () => {
+      if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) picker.value = text.value;
+    });
+  }
+</script>

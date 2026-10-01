@@ -140,7 +140,6 @@ export default function MatchStatsPanel({
           font-size: 0.78rem;
           font-weight: 800;
           letter-spacing: 0.05em;
-          text-transform: uppercase;
           color: #f0f2f5;
           min-width: 60px;
         }
@@ -150,7 +149,6 @@ export default function MatchStatsPanel({
           font-size: 0.62rem;
           font-weight: 600;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
           color: #454a52;
           text-align: center;
           flex: 1;
@@ -199,7 +197,6 @@ export default function MatchStatsPanel({
           font-size: 0.68rem;
           font-weight: 600;
           letter-spacing: 0.07em;
-          text-transform: uppercase;
           color: #8a9099;
           text-align: center;
           white-space: nowrap;

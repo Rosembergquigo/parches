@@ -1,0 +1,15 @@
+---
+/**
+ * Compat: /manage ahora vive en el dashboard del torneo (op=operar).
+ */
+import { requireOrgEditor } from '../../../../../lib/auth';
+import { orgDashPath } from '../../../../../lib/orgDash';
+
+const gate = await requireOrgEditor(Astro);
+if (gate instanceof Response) return gate;
+const { org } = gate;
+
+const { tournamentSlug } = Astro.params;
+if (!tournamentSlug) return Astro.redirect(`/orgs/${org.slug}`);
+return Astro.redirect(orgDashPath(org.slug, tournamentSlug, 'operar'));
+---
