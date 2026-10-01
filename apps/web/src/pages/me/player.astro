@@ -1,0 +1,25 @@
+---
+/**
+ * Módulo jugador — solo si User.role = PLAYER.
+ */
+import Base from '../../layouts/Base.astro';
+import ProfileShell from '../../layouts/ProfileShell.astro';
+import PlayerProfileHeader from '../../components/user/PlayerProfileHeader.astro';
+import PlayerCareerSummary from '../../components/user/PlayerCareerSummary.astro';
+import { requireAuth } from '../../lib/auth';
+import { getPlayerProfile } from '../../lib/api';
+
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
+if (auth.role !== 'PLAYER') return Astro.redirect('/profile');
+
+const player = await getPlayerProfile(auth.id, Astro.request);
+if (!player) return Astro.redirect('/profile');
+---
+
+<Base title={`Jugador · ${player.name} | Chapi`} description="Tu módulo de jugador" noIndex={true}>
+  <PlayerProfileHeader player={player} isOwn={true} />
+  <ProfileShell>
+    <PlayerCareerSummary player={player} />
+  </ProfileShell>
+</Base>

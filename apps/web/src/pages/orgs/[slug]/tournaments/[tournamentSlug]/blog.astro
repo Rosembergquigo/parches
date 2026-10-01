@@ -1,0 +1,451 @@
+---
+/**
+ * Blog / foro oficial del campeonato.
+ * El organizador redacta el post y puede adjuntar imágenes.
+ */
+import Base from '../../../../../layouts/Base.astro';
+import { requireOrgEditor } from '../../../../../lib/auth';
+import {
+  api,
+  ApiError,
+  getTournamentPost,
+  getTournamentPosts,
+  uploadPostImage,
+  type RawTournamentPost,
+} from '../../../../../lib/api';
+import { mediaUrl } from '../../../../../lib/media';
+import { orgDashPath } from '../../../../../lib/orgDash';
+import type { RawTournament } from '../../../../../lib/adapters';
+
+const gate = await requireOrgEditor(Astro);
+if (gate instanceof Response) return gate;
+const { org } = gate;
+
+const { tournamentSlug } = Astro.params;
+
+let tournament: RawTournament | null = null;
+try {
+  tournament = await api.get<RawTournament>(`/tournaments/${tournamentSlug}`, Astro.request);
+} catch (err) {
+  if (err instanceof ApiError && err.status === 404) return Astro.redirect('/404');
+  throw err;
+}
+if (!tournament || tournament.organizationId !== org.id) {
+  return Astro.redirect(`/orgs/${org.slug}`);
+}
+
+const tSlug = tournament.slug ?? tournament.id;
+const blogPath = `/orgs/${org.slug}/tournaments/${tSlug}/blog`;
+const dashPath = orgDashPath(org.slug, tSlug, 'foro');
+
+const CATEGORY_VALUE: Record<string, string> = {
+  Comunicado: 'COMUNICADO',
+  Noticia: 'NOTICIA',
+  Anuncio: 'ANUNCIO',
+};
+
+let error: string | null = null;
+const saved = Astro.url.searchParams.get('ok') === '1';
+const editId = Astro.url.searchParams.get('edit');
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? 'create');
+
+  try {
+    if (intent === 'delete') {
+      const postId = String(form.get('postId') ?? '');
+      if (postId) await api.delete(`/tournaments/${tSlug}/posts/${postId}`, Astro.request);
+      return Astro.redirect(dashPath);
+    }
+
+    const title = String(form.get('title') ?? '').trim();
+    const body = String(form.get('body') ?? '').trim();
+    const category = String(form.get('category') ?? 'NOTICIA');
+    const excerpt = String(form.get('excerpt') ?? '').trim();
+    const pinned = form.get('pinned') === 'on';
+    const postId = String(form.get('postId') ?? '').trim();
+
+    if (!title || !body) {
+      error = 'El título y el texto del post son obligatorios.';
+    } else {
+      const files: File[] = [];
+      for (const item of form.getAll('images')) {
+        if (item instanceof File && item.size > 0) files.push(item);
+      }
+      if (files.length > 6) {
+        error = 'Puedes adjuntar máximo 6 imágenes.';
+      } else {
+        const imageUrls: string[] = [];
+        for (const file of files) {
+          imageUrls.push(await uploadPostImage(file, Astro.request));
+        }
+
+        if (intent === 'update' && postId) {
+          const payload: Record<string, unknown> = {
+            title,
+            body,
+            excerpt: excerpt || undefined,
+            category,
+            pinned,
+          };
+          if (imageUrls.length > 0) {
+            payload.imageUrls = imageUrls;
+            payload.coverImageUrl = imageUrls[0];
+          }
+          await api.patch<RawTournamentPost>(
+            `/tournaments/${tSlug}/posts/${postId}`,
+            payload,
+            Astro.request,
+          );
+          return Astro.redirect(dashPath);
+        }
+
+        await api.post<RawTournamentPost>(`/tournaments/${tSlug}/posts`, {
+          title,
+          body,
+          excerpt: excerpt || undefined,
+          category,
+          pinned,
+          imageUrls,
+          coverImageUrl: imageUrls[0],
+        }, Astro.request);
+        return Astro.redirect(dashPath);
+      }
+    }
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo guardar el post';
+  }
+}
+
+const posts = await getTournamentPosts(tSlug, Astro.request);
+const editing = editId
+  ? (posts.find(p => p.id === editId) ?? await getTournamentPost(tSlug, editId, Astro.request))
+  : null;
+if (editId && !editing && !error) {
+  error = 'No se encontró el post a editar.';
+}
+const isEditing = Boolean(editing);
+const selectedCategory = editing
+  ? (CATEGORY_VALUE[editing.category] ?? 'NOTICIA')
+  : 'NOTICIA';
+---
+
+<Base
+  title={`Foro · ${tournament.name} | Chapi`}
+  description={`Publica el blog y los comunicados de ${tournament.name}.`}
+  noIndex={true}
+>
+  <main class="blog">
+    <p class="blog__crumb">
+      <a href={dashPath}>{org.name}</a>
+      <span aria-hidden="true"> / </span>
+      <span>{tournament.name}</span>
+    </p>
+    <h1 class="display-md">{isEditing ? 'Editar publicación' : 'Foro del campeonato'}</h1>
+    <p class="blog__lead">
+      {isEditing
+        ? 'Cambia el texto, el tipo o las fotos. Si no adjuntas imágenes nuevas, se conservan las actuales.'
+        : 'Escribe un comunicado, noticia o anuncio. Las imágenes quedan en la ficha pública del torneo.'}
+    </p>
+
+    {saved && <p class="blog__ok" role="status">Publicado.</p>}
+    {error && <div class="auth-error" role="alert">{error}</div>}
+
+    <form
+      method="POST"
+      enctype="multipart/form-data"
+      class="blog-form"
+      action={isEditing && editing ? `${blogPath}?edit=${editing.id}` : blogPath}
+    >
+      <input type="hidden" name="intent" value={isEditing ? 'update' : 'create'} />
+      {isEditing && editing && <input type="hidden" name="postId" value={editing.id} />}
+
+      <div class="blog-form__row">
+        <div class="form-field">
+          <label class="label" for="title">Título</label>
+          <input type="text" id="title" name="title" required maxlength="140"
+            placeholder="Cambio de horario, jornada 4…" class="form-input"
+            value={editing?.title ?? ''} />
+        </div>
+        <div class="form-field">
+          <label class="label" for="category">Tipo</label>
+          <select id="category" name="category" class="form-input">
+            <option value="COMUNICADO" selected={selectedCategory === 'COMUNICADO'}>Comunicado</option>
+            <option value="NOTICIA" selected={selectedCategory === 'NOTICIA'}>Noticia</option>
+            <option value="ANUNCIO" selected={selectedCategory === 'ANUNCIO'}>Anuncio</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="excerpt">Bajada (opcional)</label>
+        <input type="text" id="excerpt" name="excerpt" maxlength="180"
+          placeholder="Una línea que se ve en la tarjeta del foro"
+          class="form-input" value={editing?.excerpt ?? ''} />
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="body">Texto</label>
+        <textarea id="body" name="body" required rows="8"
+          placeholder="Redacta el post del blog…"
+          class="form-input form-input--area">{editing?.body ?? ''}</textarea>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="images">Imágenes</label>
+        <input
+          type="file"
+          id="images"
+          name="images"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
+        />
+        <p class="blog__hint">
+          {isEditing
+            ? 'Hasta 6 fotos. Déjalas vacías para conservar las actuales; si subes nuevas, reemplazan las anteriores.'
+            : 'Hasta 6 fotos (JPG, PNG, WEBP o GIF). La primera es la portada.'}
+        </p>
+        {isEditing && editing && editing.imageUrls.length > 0 && (
+          <div class="blog-preview">
+            {editing.imageUrls.map(url => (
+              <img src={mediaUrl(url)} alt="" />
+            ))}
+          </div>
+        )}
+        <div class="blog-preview" id="image-preview" hidden></div>
+      </div>
+
+      <label class="blog-check">
+        <input type="checkbox" name="pinned" checked={editing?.pinned ?? false} />
+        Fijar en el foro
+      </label>
+
+      <div class="blog-form__actions">
+        <button type="submit" class="btn-accent" style="padding: 10px 22px;">
+          {isEditing ? 'Guardar cambios' : 'Publicar en el foro'}
+        </button>
+        {isEditing && (
+          <a href={dashPath} class="btn-ghost" style="padding: 10px 16px;">Cancelar</a>
+        )}
+      </div>
+    </form>
+
+    <section class="blog-list" aria-label="Posts publicados">
+      <h2 class="blog-list__title">Publicados</h2>
+      {posts.length === 0 ? (
+        <p class="blog__empty">Todavía no hay posts en este campeonato.</p>
+      ) : (
+        <ul class="blog-list__items">
+          {posts.map(post => (
+            <li class="blog-item">
+              {post.coverImageUrl && (
+                <img src={mediaUrl(post.coverImageUrl)} alt="" class="blog-item__thumb" />
+              )}
+              <div class="blog-item__body">
+                <p class="blog-item__meta">
+                  {post.category}
+                  {post.pinned ? ' · Fijado' : ''}
+                </p>
+                <a href={`/tournaments/${tSlug}/news/${post.id}`} class="blog-item__title">
+                  {post.title}
+                </a>
+                <p class="blog-item__excerpt">{post.excerpt}</p>
+              </div>
+              <div class="blog-item__actions">
+                <a href={`${blogPath}?edit=${post.id}`} class="btn-ghost" style="padding: 7px 12px; font-size: 0.78rem;">
+                  Editar
+                </a>
+                <form method="POST">
+                  <input type="hidden" name="intent" value="delete" />
+                  <input type="hidden" name="postId" value={post.id} />
+                  <button type="submit" class="btn-ghost" style="padding: 7px 12px; font-size: 0.78rem;">
+                    Borrar
+                  </button>
+                </form>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </main>
+</Base>
+
+<style>
+.blog {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+.blog__crumb {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.blog__crumb a { color: var(--accent); }
+.blog__lead {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  margin: 8px 0 22px;
+}
+.blog__ok {
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.35);
+  color: var(--success);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 16px;
+}
+.auth-error {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 16px;
+}
+.blog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 36px;
+}
+.blog-form__row {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 12px;
+}
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+select.form-input { appearance: none; }
+.form-input--area { border-radius: var(--radius-lg); resize: vertical; }
+.form-input:focus { outline: none; border-color: var(--accent); }
+.blog__hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+.blog-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.blog-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.blog-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.blog-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.blog-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.blog-list__title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+.blog__empty { color: var(--text-secondary); }
+.blog-list__items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.blog-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.blog-item__thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.blog-item__body { flex: 1; min-width: 0; }
+.blog-item__meta {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+.blog-item__title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+.blog-item__excerpt {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 640px) {
+  .blog-form__row { grid-template-columns: 1fr; }
+  .blog-item { flex-wrap: wrap; }
+}
+</style>
+
+<script>
+  const input = document.getElementById('images') as HTMLInputElement | null;
+  const preview = document.getElementById('image-preview');
+  input?.addEventListener('change', () => {
+    if (!preview || !input.files) return;
+    preview.replaceChildren();
+    const files = [...input.files].slice(0, 6);
+    preview.hidden = files.length === 0;
+    for (const file of files) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      preview.appendChild(img);
+    }
+  });
+</script>

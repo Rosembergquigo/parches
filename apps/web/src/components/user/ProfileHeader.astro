@@ -3,10 +3,10 @@
  * ProfileHeader.astro — cabecera del perfil de usuario.
  *
  * Muestra avatar (imagen o iniciales), nombre, rol, bio
- * y las métricas principales según el rol:
+ * y las métricas principales según el rol de sesión:
  *   VIEWER   → torneos seguidos + partidos vistos
  *   REFEREE  → partidos arbitrados + eventos registrados
- *   ORGANIZER/ADMIN → indicador de rol
+ *   ORGANIZER/ADMIN → indicador de rol (el dashboard vive en /me/organizer)
  *
  * isOwn=true agrega el botón de editar perfil.
  */
@@ -20,7 +20,7 @@ interface Props {
 const { user, isOwn = false } = Astro.props;
 
 const ROLE_LABEL: Record<string, string> = {
-  VIEWER:    'Espectador',
+  VIEWER:    'Visualizador',
   REFEREE:   'Árbitro',
   ORGANIZER: 'Organizador',
   ADMIN:     'Admin',
@@ -150,6 +150,21 @@ const stats = user.role === 'REFEREE'
   align-items: center;
   gap: 18px;
 }
+.ph__photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ph__photo-save {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
 .ph__avatar {
   width: 72px;
   height: 72px;
@@ -185,7 +200,6 @@ const stats = user.role === 'REFEREE'
   font-size: clamp(1.4rem, 3vw, 2rem);
   font-weight: 900;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   color: var(--text-primary);
   line-height: 1;
 }
@@ -198,7 +212,6 @@ const stats = user.role === 'REFEREE'
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 5px 10px;
   border: 1px solid var(--border);
@@ -223,7 +236,6 @@ const stats = user.role === 'REFEREE'
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   padding: 3px 9px;
   border: 1px solid;
   border-radius: 3px;
@@ -233,7 +245,6 @@ const stats = user.role === 'REFEREE'
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -274,7 +285,6 @@ const stats = user.role === 'REFEREE'
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 

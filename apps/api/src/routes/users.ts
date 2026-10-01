@@ -12,9 +12,19 @@
  * a propósito hasta que se decida esa parte del alcance.
  */
 import type { FastifyPluginAsync } from 'fastify';
+import { withoutPasswordHash } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
 
 export const userRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/referees', { onRequest: [app.authenticate] }, async (_req, reply) => {
+    const referees = await prisma.user.findMany({
+      where: { role: 'REFEREE' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return reply.send(referees);
+  });
+
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
@@ -31,15 +41,16 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!user) return reply.status(404).send({ error: 'Not found' });
 
+    const safe = withoutPasswordHash(user);
     if (user.role === 'REFEREE') {
       const [matchesRefereed, eventsLogged] = await Promise.all([
         prisma.match.count({ where: { refereeId: user.id } }),
         prisma.matchEvent.count({ where: { refereeId: user.id } }),
       ]);
-      return reply.send({ ...user, matchesRefereed, eventsLogged });
+      return reply.send({ ...safe, matchesRefereed, eventsLogged });
     }
 
-    return reply.send(user);
+    return reply.send(safe);
   });
 
   app.get<{ Params: { id: string } }>('/:id/referee-matches', async (req, reply) => {

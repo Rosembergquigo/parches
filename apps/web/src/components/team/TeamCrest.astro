@@ -1,0 +1,48 @@
+---
+/**
+ * Escudo de equipo. Si no hay logo, muestra la abreviación.
+ */
+import { mediaUrl } from '../../lib/media';
+
+interface Props {
+  shortName: string;
+  logoUrl?: string | null;
+  class?: string;
+}
+
+const { shortName, logoUrl, class: className } = Astro.props;
+const src = mediaUrl(logoUrl);
+---
+
+<span class:list={['crest', className]} aria-hidden="true">
+  {src ? (
+    <img src={src} alt="" loading="lazy" />
+  ) : (
+    <span class="crest__abbr">{shortName}</span>
+  )}
+</span>
+
+<style>
+.crest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.crest img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  box-sizing: border-box;
+}
+.crest__abbr {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+</style>

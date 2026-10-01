@@ -1,0 +1,28 @@
+---
+/**
+ * Módulo árbitro — solo si User.role = REFEREE.
+ */
+import Base from '../../layouts/Base.astro';
+import ProfileShell from '../../layouts/ProfileShell.astro';
+import ProfileHeader from '../../components/user/ProfileHeader.astro';
+import UserSchedule from '../../components/user/UserSchedule.astro';
+import UserHistory from '../../components/user/UserHistory.astro';
+import { requireAuth } from '../../lib/auth';
+import { getUserProfile, getRefereeMatches } from '../../lib/api';
+
+const auth = await requireAuth(Astro);
+if (auth instanceof Response) return auth;
+if (auth.role !== 'REFEREE') return Astro.redirect('/profile');
+
+const referee = await getUserProfile(auth.id, Astro.request);
+const matches = await getRefereeMatches(auth.id, Astro.request);
+if (!referee) return Astro.redirect('/profile');
+---
+
+<Base title={`Árbitro · ${referee.name} | Chapi`} description="Tu módulo de árbitro" noIndex={true}>
+  <ProfileHeader user={referee} isOwn={true} />
+  <ProfileShell>
+    <UserSchedule matches={matches.schedule} userRole="REFEREE" />
+    <UserHistory matches={matches.history} userRole="REFEREE" />
+  </ProfileShell>
+</Base>

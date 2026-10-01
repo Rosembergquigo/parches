@@ -3,25 +3,26 @@
  * pages/teams/[id].astro — página de equipo.
  *
  * SSR. 404 si el equipo no existe (GET /api/teams/:id devuelve 404).
- * La plantilla (squad) todavía no tiene datos reales — requiere
- * PlayerEnrollment, que no está cargado en el seed aún — así que esa
- * sección simplemente no se renderiza (squad.length === 0).
+ * En tenis, foto y color salen de Ajustes de perfil.
  */
 import Base from '../../layouts/Base.astro';
 import TeamHero from '../../components/team/TeamHero.astro';
 import TeamSquad from '../../components/team/TeamSquad.astro';
 import TeamMatchHistory from '../../components/team/TeamMatchHistory.astro';
 import TeamStatsBar from '../../components/team/TeamStatsBar.astro';
+import { isIndividualSport } from '@parches/config';
 import { getTeamDetail } from '../../lib/api';
 
 const { id } = Astro.params;
 const team = await getTeamDetail(id!, Astro.request);
-
 if (!team) return Astro.redirect('/404');
 
+const individual = isIndividualSport(team.sport);
+
 const hasStats = !!team.standing;
-const hasSquad = team.squad.length > 0;
+const hasSquad = team.squad.length > 0 && !individual;
 const hasMatches = team.recentMatches.length > 0;
+const enrolledNotice = Astro.url.searchParams.get('ok') === 'inscrito';
 ---
 
 <Base
@@ -32,11 +33,17 @@ const hasMatches = team.recentMatches.length > 0;
 
   <main class="t-page">
     <div class="t-page__inner">
-      <nav class="t-tabs" id="tTabs" aria-label="Secciones del equipo">
-        {hasSquad && <a href="#plantilla" class="t-tab">Plantilla</a>}
-        {hasMatches && <a href="#partidos" class="t-tab">Partidos</a>}
-        {hasStats && <a href="#estadisticas" class="t-tab">Estadísticas</a>}
-      </nav>
+      {enrolledNotice && (
+        <p class="look__ok" role="status">Quedaste inscrito.</p>
+      )}
+
+      {(hasSquad || hasMatches || hasStats) && (
+        <nav class="t-tabs" id="tTabs" aria-label="Secciones del equipo">
+          {hasSquad && <a href="#plantilla" class="t-tab">Plantilla</a>}
+          {hasMatches && <a href="#partidos" class="t-tab">Partidos</a>}
+          {hasStats && <a href="#estadisticas" class="t-tab">Estadísticas</a>}
+        </nav>
+      )}
 
       {hasSquad && (
         <section id="plantilla" class="t-section" aria-label="Plantilla">
@@ -68,6 +75,11 @@ const hasMatches = team.recentMatches.length > 0;
   max-width: 1280px;
   margin: 0 auto;
 }
+.look__ok {
+  margin: 8px 24px 12px;
+  font-size: 0.85rem;
+  color: #86efac;
+}
 .t-tabs {
   display: flex;
   gap: 4px;
@@ -86,7 +98,6 @@ const hasMatches = team.recentMatches.length > 0;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 6px 14px;
   border-radius: var(--radius-sm);

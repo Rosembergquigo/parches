@@ -1,0 +1,200 @@
+---
+/**
+ * Desplegable de perfiles / módulos de la sesión.
+ * Visualizador es el default; el resto son entradas a cada módulo.
+ */
+import type { AuthUser } from '../../lib/auth';
+import type { SessionModule } from '../../lib/session';
+import { activeModuleId } from '../../lib/session';
+
+interface Props {
+  user: AuthUser;
+  modules: SessionModule[];
+  currentPath: string;
+}
+
+const { user, modules, currentPath } = Astro.props;
+const active = activeModuleId(currentPath);
+const current = modules.find(m => m.id === active) ?? modules[0];
+---
+
+<details class="session">
+  <summary class="session__trigger" title={user.name}>
+    <span class="session__avatar" aria-hidden="true">{user.name.charAt(0).toUpperCase()}</span>
+    <span class="session__who">
+      <span class="session__name">{user.name.split(' ')[0]}</span>
+      <span class="session__mod">{current?.label ?? 'Visualizador'}</span>
+    </span>
+    <svg class="session__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </summary>
+
+  <div class="session__panel">
+    <p class="session__label">Perfiles</p>
+    <nav class="session__list" aria-label="Módulos de la sesión">
+      {modules.map(m => (
+        <a
+          href={m.href}
+          class:list={['session__item', m.id === active && 'session__item--on']}
+        >
+          <span class="session__item-text">
+            <span class="session__item-name">{m.label}</span>
+            {m.hint && <span class="session__item-hint">{m.hint}</span>}
+          </span>
+        </a>
+      ))}
+    </nav>
+
+    <div class="session__footer">
+      <a href="/settings" class="session__link">Ajustes de perfil</a>
+      <a href="/auth/logout" class="session__link session__link--out">Salir</a>
+    </div>
+  </div>
+</details>
+
+<style>
+.session {
+  position: relative;
+}
+.session__trigger {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--transition);
+}
+.session__trigger::-webkit-details-marker { display: none; }
+.session__trigger:hover { border-color: var(--border-hover); }
+.session[open] .session__trigger { border-color: var(--border-hover); }
+.session[open] .session__chevron { transform: rotate(180deg); }
+
+.session__avatar {
+  width: 28px;
+  height: 28px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.session__who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.session__name {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+}
+.session__mod {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.session__chevron {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: transform var(--transition);
+}
+
+.session__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 10px 8px 8px;
+  z-index: 120;
+}
+.session__label {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 2px 10px 8px;
+  margin: 0;
+}
+.session__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session__item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.session__item:hover { background: var(--bg-raised); }
+.session__item--on { background: var(--accent-dim); }
+.session__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.session__item-name {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.session__item-hint {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+.session__footer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session__link {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+.session__link:hover { color: var(--text-primary); background: var(--bg-raised); }
+.session__link--out:hover { color: var(--live); }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLDetailsElement>('.session').forEach(menu => {
+    if (menu.dataset.bound === '1') return;
+    menu.dataset.bound = '1';
+    document.addEventListener('click', event => {
+      if (!menu.contains(event.target as Node)) menu.open = false;
+    });
+  });
+</script>

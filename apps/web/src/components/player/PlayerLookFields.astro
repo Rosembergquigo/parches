@@ -1,0 +1,212 @@
+---
+/**
+ * Foto y color de perfil. Va dentro de un <form enctype="multipart/form-data">.
+ */
+import { DEFAULT_TEAM_COLORS } from '../../lib/tournamentWizard';
+import { mediaUrl } from '../../lib/media';
+
+interface Props {
+  color: string;
+  photoUrl?: string | null;
+  shortName?: string;
+  showClear?: boolean;
+  photoLocked?: boolean;
+  photoHref?: string;
+}
+
+const {
+  color,
+  photoUrl,
+  shortName = 'YO',
+  showClear = false,
+  photoLocked = false,
+  photoHref,
+} = Astro.props;
+
+const hex = /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#00e5ff';
+const src = mediaUrl(photoUrl);
+---
+
+<div class="plook">
+  <div class:list={['plook__photo', photoLocked && 'plook__photo--locked']}>
+    {src ? (
+      <img src={src} alt="" class="plook__img" />
+    ) : (
+      <span class="plook__abbr" style={`--pl-color: ${hex}`}>{shortName}</span>
+    )}
+    {!photoLocked && (
+      <input
+        type="file"
+        name="avatar"
+        class="plook__file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        aria-label="Foto de perfil"
+      />
+    )}
+    {photoLocked ? (
+      photoHref ? (
+        <a href={photoHref} class="plook__photo-hint">Foto de perfil</a>
+      ) : (
+        <span class="plook__photo-hint">Foto de perfil</span>
+      )
+    ) : (
+      <span class="plook__photo-hint">Foto</span>
+    )}
+  </div>
+
+  <div class="plook__colors">
+    <span class="plook__label">Color</span>
+    <div class="plook__swatches">
+      {DEFAULT_TEAM_COLORS.map(c => (
+        <button
+          type="button"
+          class:list={['plook__swatch', hex.toLowerCase() === c && 'is-on']}
+          data-color={c}
+          aria-label={`Color ${c}`}
+          style={`background: ${c}`}
+        ></button>
+      ))}
+    </div>
+    <label class="plook__custom">
+      <span class="plook__label">Otro</span>
+      <input type="color" name="colorCustom" value={hex} aria-label="Color personalizado" />
+    </label>
+    <input type="hidden" name="color" value={hex} />
+    {showClear && src && !photoLocked && (
+      <label class="plook__clear">
+        <input type="checkbox" name="clearAvatar" value="1" />
+        Quitar foto
+      </label>
+    )}
+  </div>
+</div>
+
+<style>
+.plook {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.plook__photo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.plook__photo--locked { cursor: default; }
+.plook__photo-hint a,
+a.plook__photo-hint {
+  color: var(--accent);
+  text-decoration: none;
+}
+a.plook__photo-hint:hover { text-decoration: underline; }
+.plook__img, .plook__abbr {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.plook__img {
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.plook__abbr {
+  background: color-mix(in srgb, var(--pl-color) 22%, var(--bg-overlay));
+  border: 1px dashed color-mix(in srgb, var(--pl-color) 50%, var(--border));
+  color: var(--pl-color);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.plook__file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.plook__photo-hint {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-align: center;
+}
+.plook__colors { min-width: 180px; }
+.plook__label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.plook__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plook__swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+  cursor: pointer;
+  padding: 0;
+}
+.plook__swatch.is-on,
+.plook__swatch:focus-visible {
+  border-color: #fff;
+}
+.plook__custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.plook__custom input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.plook__clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.plook__clear input { accent-color: var(--accent); }
+</style>
+
+<script>
+  document.querySelectorAll('.plook').forEach(root => {
+    const hidden = root.querySelector('input[name="color"]');
+    const custom = root.querySelector('input[name="colorCustom"]');
+    const swatches = root.querySelectorAll('.plook__swatch');
+    function setColor(value) {
+      if (hidden) hidden.value = value;
+      if (custom) custom.value = value;
+      swatches.forEach(btn => {
+        btn.classList.toggle('is-on', btn.dataset.color === value.toLowerCase());
+      });
+    }
+    swatches.forEach(btn => {
+      btn.addEventListener('click', () => setColor(btn.dataset.color));
+    });
+    custom?.addEventListener('input', () => setColor(custom.value));
+  });
+</script>

@@ -2,14 +2,17 @@
 /**
  * pages/orgs/[slug]/tournaments/new.astro — wizard de torneo.
  *
- * Cuatro pasos (datos → formato → equipos → fixture).
- * Al guardar, el torneo se ve en /tournaments/[slug] con calendario.
+ * Cuatro pasos (datos → formato → equipos/jugadores → fixture).
+ * En tenis el formato por defecto es eliminación directa; liga y grupos
+ * siguen disponibles si el torneo garantiza una cantidad de partidos.
  *
  * Auth + membresía OWNER/ADMIN/EDITOR de esa empresa.
  */
 import Base from '../../../../layouts/Base.astro';
 import { requireAuth } from '../../../../lib/auth';
-import { getOrganization } from '../../../../lib/api';
+import { getOrganization, uploadTournamentLogo } from '../../../../lib/api';
+import { mediaUrl } from '../../../../lib/media';
+import { isIndividualSport } from '@parches/config';
 import {
   WIZARD_SPORTS,
   defaultWizard,
@@ -34,7 +37,15 @@ let draft: WizardInput = defaultWizard(org.brandColor);
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   draft = readWizardForm(form);
-  const invalid = validateWizard(draft);
+  const logoFile = form.get('logo');
+  if (logoFile instanceof File && logoFile.size > 0) {
+    try {
+      draft.logoUrl = await uploadTournamentLogo(logoFile, Astro.request);
+    } catch (err: unknown) {
+      error = err instanceof Error ? err.message : 'No se pudo subir el logo';
+    }
+  }
+  const invalid = error ? error : validateWizard(draft);
   if (invalid) {
     error = invalid;
   } else {
@@ -54,11 +65,13 @@ const groupOptions = Array.from({ length: draft.groupCount }, (_, i) => ({
 
 const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
   ? 4
-  : error && /equipo|Grupo|abreviación/i.test(error)
+  : error && /equipo|jugador|Grupo|abreviación|inscrib/i.test(error)
     ? 3
     : error && /formato|grupo|playoff/i.test(error)
       ? 2
       : 1;
+
+const individual = isIndividualSport(draft.sport);
 ---
 
 <Base
@@ -74,13 +87,17 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
           <a href={`/orgs/${org.slug}`}>{org.name}</a>
         </p>
         <h1 class="display-md" style="margin-top: 8px;">Nuevo torneo</h1>
-        <p class="wiz__lead">Datos, formato, equipos y calendario.</p>
+        <p class="wiz__lead" id="wiz-lead">
+          {individual
+            ? 'Datos, formato y jugadores. Lo típico es eliminación directa; liga y grupos siguen si quieres asegurar partidos.'
+            : 'Datos, formato, equipos y calendario.'}
+        </p>
       </div>
 
       <ol class="wiz__steps" id="wiz-steps" aria-label="Pasos">
         <li><button type="button" class="wiz__step is-active" data-goto="1">1. Datos</button></li>
         <li><button type="button" class="wiz__step" data-goto="2">2. Formato</button></li>
-        <li><button type="button" class="wiz__step" data-goto="3">3. Equipos</button></li>
+        <li><button type="button" class="wiz__step" data-goto="3" id="wiz-step-roster">{individual ? '3. Jugadores' : '3. Equipos'}</button></li>
         <li><button type="button" class="wiz__step" data-goto="4">4. Fixture</button></li>
       </ol>
 
@@ -88,7 +105,7 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
         <div class="auth-error" role="alert">{error}</div>
       )}
 
-      <form method="POST" class="wiz__form" id="wiz-form">
+      <form method="POST" enctype="multipart/form-data" class="wiz__form" id="wiz-form">
         <section class="wiz__panel is-active" data-step="1">
           <div class="form-field">
             <label class="label" for="name">Nombre</label>
@@ -131,9 +148,13 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
           </div>
 
           <div class="form-field">
-            <label class="label" for="logoUrl">URL del logo (opcional)</label>
-            <input type="url" id="logoUrl" name="logoUrl"
-              value={draft.logoUrl} placeholder="https://…" class="form-input" />
+            <label class="label" for="logo">Logo del torneo (opcional)</label>
+            <input type="hidden" name="logoUrl" value={draft.logoUrl} />
+            {draft.logoUrl && (
+              <img src={mediaUrl(draft.logoUrl)} alt="" class="wiz__logo-preview" width="56" height="56" />
+            )}
+            <input type="file" id="logo" name="logo" class="form-input"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" />
           </div>
 
           <div class="form-field">
@@ -154,11 +175,27 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
           <fieldset class="wiz__choices">
             <legend class="label">Cómo se juega</legend>
             <label class="wiz__choice">
-              <input type="radio" name="format" value="league" required
+              <input type="radio" name="format" value="knockout" required
+                checked={draft.format === 'knockout'} />
+              <span>
+                <strong>Eliminación directa</strong>
+                <span id="format-knockout-copy">
+                  {individual
+                    ? 'Cuadro de playoffs: el que pierde queda fuera. Es lo habitual en tenis. El bracket se arma con los inscritos.'
+                    : 'Copa: el que pierde queda fuera. Sin tabla de liga ni fase de grupos.'}
+                </span>
+              </span>
+            </label>
+            <label class="wiz__choice">
+              <input type="radio" name="format" value="league"
                 checked={draft.format === 'league'} />
               <span>
                 <strong>Liga</strong>
-                Tabla única. Todos los equipos en una sola clasificación.
+                <span id="format-league-copy">
+                  {individual
+                    ? 'Todos contra todos: cada inscripción asegura una cantidad de partidos. Úsalo si el torneo garantiza fechas.'
+                    : 'Tabla única. Todos los equipos en una sola clasificación.'}
+                </span>
               </span>
             </label>
             <label class="wiz__choice">
@@ -166,7 +203,11 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
                 checked={draft.format === 'groups'} />
               <span>
                 <strong>Grupos</strong>
-                Varias zonas (Grupo A, B…) y tabla por grupo.
+                <span id="format-groups-copy">
+                  {individual
+                    ? 'Zonas y tabla. Sirve para asegurar partidos antes de un cuadro, si el torneo lo promete.'
+                    : 'Varias zonas (Grupo A, B…) y tabla por grupo.'}
+                </span>
               </span>
             </label>
           </fieldset>
@@ -192,17 +233,26 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
         </section>
 
         <section class="wiz__panel" data-step="3">
-          <p class="wiz__hint">Mínimo 2 equipos. La abreviación son 2–4 letras (NAL, MIL).</p>
+          <div>
+            <p class="label" id="teams-title">{individual ? 'Jugadores (opcional)' : 'Equipos'}</p>
+            <p class="wiz__hint" id="teams-hint">
+              {individual
+                ? 'Opcional. En tenis cada jugador se inscribe desde la ficha pública (Inscríbete). También puedes cargarlos aquí.'
+                : 'Mínimo 2 equipos. La abreviación son 2–4 letras (NAL, MIL).'}
+            </p>
+          </div>
           <div id="team-list" class="wiz__teams">
             {draft.teams.map((team, i) => (
               <div class="team-row">
                 <input type="text" name="teamName" value={team.name}
-                  placeholder="Nombre del equipo" class="form-input" autocomplete="off" />
+                  placeholder={individual ? 'Nombre del jugador' : 'Nombre del equipo'}
+                  class="form-input" autocomplete="off" />
                 <input type="text" name="teamShort" value={team.shortName}
                   placeholder="ABC" maxlength="4" class="form-input team-row__short"
                   autocomplete="off" />
                 <input type="color" name="teamColor" value={team.color}
-                  class="team-row__color" aria-label="Color del equipo" />
+                  class="team-row__color"
+                  aria-label={individual ? 'Color del jugador' : 'Color del equipo'} />
                 <select name="teamGroup" class="form-input team-row__group"
                   hidden={draft.format !== 'groups'}>
                   {groupOptions.map(opt => (
@@ -211,32 +261,44 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
                     </option>
                   ))}
                 </select>
-                <button type="button" class="team-row__remove" aria-label={`Quitar equipo ${i + 1}`}>×</button>
+                <button type="button" class="team-row__remove"
+                  aria-label={individual ? `Quitar jugador ${i + 1}` : `Quitar equipo ${i + 1}`}>×</button>
               </div>
             ))}
           </div>
           <button type="button" class="btn-ghost" id="add-team" style="align-self:flex-start;">
-            Agregar equipo
+            {individual ? 'Agregar jugador' : 'Agregar equipo'}
           </button>
         </section>
 
         <section class="wiz__panel" data-step="4">
           <fieldset class="wiz__choices">
             <legend class="label">Calendario</legend>
-            <label class="wiz__choice">
-              <input type="radio" name="fixtureMode" value="generate" required
-                checked={draft.fixtureMode !== 'skip'} />
+            <p class="wiz__hint" id="knockout-cal-note" hidden={draft.format !== 'knockout'}>
+              En eliminación directa no hay todos-contra-todos. El cuadro se arma después, con los inscritos.
+            </p>
+            <label class="wiz__choice" id="fixture-rr" hidden={draft.format === 'knockout'}>
+              <input type="radio" name="fixtureMode" value="generate"
+                checked={draft.format !== 'knockout' && draft.fixtureMode === 'generate'} />
               <span>
                 <strong>Generar todos-contra-todos</strong>
-                Jornadas automáticas entre las fechas del torneo.
+                <span id="fixture-gen-copy">
+                  {individual
+                    ? 'Jornadas automáticas entre quienes ya estén cargados. Así se garantiza un mínimo de partidos.'
+                    : 'Jornadas automáticas entre las fechas del torneo.'}
+                </span>
               </span>
             </label>
             <label class="wiz__choice">
-              <input type="radio" name="fixtureMode" value="skip"
-                checked={draft.fixtureMode === 'skip'} />
+              <input type="radio" name="fixtureMode" value="skip" required
+                checked={draft.format === 'knockout' || draft.fixtureMode === 'skip'} />
               <span>
-                <strong>Publicar sin fixture</strong>
-                El torneo sale con equipos y tabla en 0. Puedes cargarlo después.
+                <strong id="fixture-skip-title">{individual ? 'Publicar sin calendario' : 'Publicar sin fixture'}</strong>
+                <span id="fixture-skip-copy">
+                  {individual
+                    ? 'El cuadro sale vacío. Los jugadores se inscriben desde la ficha (Inscríbete). El calendario lo armas después.'
+                    : 'El torneo sale con equipos y tabla en 0. Puedes cargarlo después.'}
+                </span>
               </span>
             </label>
           </fieldset>
@@ -295,7 +357,6 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
   margin: 10px 0 0;
 }
@@ -318,7 +379,6 @@ const startStep = error && /fixture|calendario|jornada|saque/i.test(error)
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-muted);
   padding: 6px 12px;
   border-radius: var(--radius-pill);
@@ -360,6 +420,16 @@ select.form-input { appearance: none; }
 .form-input::placeholder { color: var(--text-muted); }
 .wiz__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .wiz__color { display: flex; align-items: center; gap: 10px; }
+.wiz__logo-preview {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-overlay);
+  margin: 0 0 8px;
+}
 .wiz__color input[type="color"] {
   width: 40px;
   height: 40px;
@@ -384,7 +454,7 @@ select.form-input { appearance: none; }
   border-color: var(--accent);
   background: var(--accent-dim);
 }
-.wiz__choice strong { display: block; font-family: var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }
+.wiz__choice strong { display: block; font-family: var(--font-display); letter-spacing: 0.04em; }
 .wiz__choice span { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; }
 .wiz__choice input { margin-top: 3px; accent-color: var(--accent); }
 .wiz__groups-only { display: flex; flex-direction: column; gap: 16px; }
@@ -397,6 +467,7 @@ select.form-input { appearance: none; }
 }
 .wiz__check input { accent-color: var(--accent); }
 .wiz__hint { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+#teams-title { margin: 0 0 4px; }
 .wiz__teams { display: flex; flex-direction: column; gap: 10px; }
 .team-row {
   display: grid;
@@ -404,7 +475,7 @@ select.form-input { appearance: none; }
   gap: 8px;
   align-items: center;
 }
-.team-row__short { text-transform: uppercase; text-align: center; padding-left: 8px; padding-right: 8px; }
+.team-row__short { text-align: center; padding-left: 8px; padding-right: 8px; }
 .team-row__color {
   width: 40px;
   height: 40px;
@@ -455,7 +526,156 @@ select.form-input { appearance: none; }
     const spotsField = document.getElementById('spots-field');
     const groupCountInput = document.getElementById('groupCount');
     const teamList = document.getElementById('team-list');
+    const sportSelect = document.getElementById('sport');
+    const teamsHint = document.getElementById('teams-hint');
+    const INDIVIDUAL = new Set(['tennis']);
+    function isIndividual() {
+      return INDIVIDUAL.has(sportSelect?.value);
+    }
+    function formatValue() {
+      return form.querySelector('input[name="format"]:checked')?.value;
+    }
+    function isKnockout() {
+      return formatValue() === 'knockout';
+    }
+    function minTeamRows() {
+      return isIndividual() ? 1 : 2;
+    }
+    function applyFixtureDefault() {
+      const skip = form.querySelector('input[name="fixtureMode"][value="skip"]');
+      const gen = form.querySelector('input[name="fixtureMode"][value="generate"]');
+      if (!skip || !gen) return;
+      if (isKnockout() || isIndividual()) {
+        skip.checked = true;
+        gen.checked = false;
+      } else {
+        gen.checked = true;
+        skip.checked = false;
+      }
+      syncCalendarUi();
+    }
+    function applyFormatDefault() {
+      const ko = form.querySelector('input[name="format"][value="knockout"]');
+      const league = form.querySelector('input[name="format"][value="league"]');
+      if (isIndividual()) {
+        if (ko) ko.checked = true;
+      } else if (league) {
+        league.checked = true;
+      }
+      syncCalendarUi();
+    }
+    function syncCalendarUi() {
+      const knockout = isKnockout();
+      const rr = document.getElementById('fixture-rr');
+      const note = document.getElementById('knockout-cal-note');
+      if (rr) rr.hidden = knockout;
+      if (note) note.hidden = !knockout;
+      if (groupsOnly) groupsOnly.hidden = !isGroups();
+      if (knockout) {
+        const skip = form.querySelector('input[name="fixtureMode"][value="skip"]');
+        const gen = form.querySelector('input[name="fixtureMode"][value="generate"]');
+        if (skip) skip.checked = true;
+        if (gen) gen.checked = false;
+      }
+      const skipOn = form.querySelector('input[name="fixtureMode"]:checked')?.value === 'skip';
+      const opts = document.getElementById('fixture-opts');
+      if (opts) opts.hidden = skipOn || knockout;
+    }
+    function trimEmptyRosterRows() {
+      if (!teamList) return;
+      const rows = [...teamList.querySelectorAll('.team-row')];
+      if (isIndividual()) {
+        const filled = rows.filter(row => row.querySelector('input[name="teamName"]')?.value.trim());
+        const empty = rows.filter(row => !row.querySelector('input[name="teamName"]')?.value.trim());
+        const keepEmpty = empty[0];
+        rows.forEach(row => {
+          if (filled.includes(row) || row === keepEmpty) return;
+          row.remove();
+        });
+        if (filled.length === 0 && teamList.querySelectorAll('.team-row').length === 0 && rows[0]) {
+          teamList.appendChild(rows[0]);
+        }
+      } else {
+        const first = teamList.querySelector('.team-row');
+        while (first && teamList.querySelectorAll('.team-row').length < 2) {
+          const node = first.cloneNode(true);
+          node.querySelectorAll('input[type="text"]').forEach(el => { el.value = ''; });
+          teamList.appendChild(node);
+        }
+      }
+    }
+    function syncSportUi() {
+      const solo = isIndividual();
+      const lead = document.getElementById('wiz-lead');
+      if (lead) {
+        lead.textContent = solo
+          ? 'Datos, formato y jugadores. Lo típico es eliminación directa; liga y grupos siguen si quieres asegurar partidos.'
+          : 'Datos, formato, equipos y calendario.';
+      }
+      const stepRoster = document.getElementById('wiz-step-roster');
+      if (stepRoster) stepRoster.textContent = solo ? '3. Jugadores' : '3. Equipos';
+      const title = document.getElementById('teams-title');
+      if (title) title.textContent = solo ? 'Jugadores (opcional)' : 'Equipos';
+      if (teamsHint) {
+        teamsHint.textContent = solo
+          ? 'Opcional. En tenis cada jugador se inscribe desde la ficha pública (Inscríbete). También puedes cargarlos aquí.'
+          : 'Mínimo 2 equipos. La abreviación son 2–4 letras (NAL, MIL).';
+      }
+      const addBtn = document.getElementById('add-team');
+      if (addBtn) addBtn.textContent = solo ? 'Agregar jugador' : 'Agregar equipo';
+      const leagueCopy = document.getElementById('format-league-copy');
+      if (leagueCopy) {
+        leagueCopy.textContent = solo
+          ? 'Todos contra todos: cada inscripción asegura una cantidad de partidos. Úsalo si el torneo garantiza fechas.'
+          : 'Tabla única. Todos los equipos en una sola clasificación.';
+      }
+      const groupsCopy = document.getElementById('format-groups-copy');
+      if (groupsCopy) {
+        groupsCopy.textContent = solo
+          ? 'Zonas y tabla. Sirve para asegurar partidos antes de un cuadro, si el torneo lo promete.'
+          : 'Varias zonas (Grupo A, B…) y tabla por grupo.';
+      }
+      const koCopy = document.getElementById('format-knockout-copy');
+      if (koCopy) {
+        koCopy.textContent = solo
+          ? 'Cuadro de playoffs: el que pierde queda fuera. Es lo habitual en tenis. El bracket se arma con los inscritos.'
+          : 'Copa: el que pierde queda fuera. Sin tabla de liga ni fase de grupos.';
+      }
+      const genCopy = document.getElementById('fixture-gen-copy');
+      if (genCopy) {
+        genCopy.textContent = solo
+          ? 'Jornadas automáticas entre quienes ya estén cargados. Así se garantiza un mínimo de partidos.'
+          : 'Jornadas automáticas entre las fechas del torneo.';
+      }
+      const skipTitle = document.getElementById('fixture-skip-title');
+      if (skipTitle) skipTitle.textContent = solo ? 'Publicar sin calendario' : 'Publicar sin fixture';
+      const skipCopy = document.getElementById('fixture-skip-copy');
+      if (skipCopy) {
+        skipCopy.textContent = solo
+          ? 'El cuadro sale vacío. Los jugadores se inscriben desde la ficha (Inscríbete). El calendario lo armas después.'
+          : 'El torneo sale con equipos y tabla en 0. Puedes cargarlo después.';
+      }
+      teamList?.querySelectorAll('input[name="teamName"]').forEach(el => {
+        el.placeholder = solo ? 'Nombre del jugador' : 'Nombre del equipo';
+      });
+      teamList?.querySelectorAll('input[name="teamColor"]').forEach(el => {
+        el.setAttribute('aria-label', solo ? 'Color del jugador' : 'Color del equipo');
+      });
+    }
     const colors = ['#00e5ff', '#f97316', '#22c55e', '#a855f7', '#eab308', '#ef4444', '#3b82f6', '#ec4899'];
+    const small = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'o', 'u', 'a', 'al', 'en']);
+    function titleCaseName(value) {
+      const text = String(value ?? '').trim().replace(/\s+/g, ' ');
+      if (!text) return '';
+      return text.split(/(\s+|-)/).map((token, i, parts) => {
+        if (!token || /^[\s-]+$/.test(token)) return token;
+        const lower = token.toLocaleLowerCase('es-CO');
+        if (['fc', 'sc', 'cf', 'cd', 'ud'].includes(lower)) return lower.toLocaleUpperCase('es-CO');
+        const first = !parts.slice(0, i).some(p => /[^\s-]/.test(p));
+        if (!first && small.has(lower)) return lower;
+        return lower.charAt(0).toLocaleUpperCase('es-CO') + lower.slice(1);
+      }).join('');
+    }
 
     function isGroups() {
       const checked = form.querySelector('input[name="format"]:checked');
@@ -515,7 +735,7 @@ select.form-input { appearance: none; }
 
     form.querySelectorAll('input[name="format"]').forEach(r => {
       r.addEventListener('change', () => {
-        if (groupsOnly) groupsOnly.hidden = !isGroups();
+        syncCalendarUi();
         syncGroupSelects();
         updateFixturePreview();
       });
@@ -558,7 +778,9 @@ select.form-input { appearance: none; }
       }
       fixturePreview.textContent = count > 0
         ? `Se crearán ${count} partido${count === 1 ? '' : 's'} programados.`
-        : 'Agrega al menos 2 equipos para generar el fixture.';
+        : isIndividual()
+          ? 'Sin jugadores cargados no hay cuadro. Publícalo vacío o agrégalos aquí.'
+          : 'Agrega al menos 2 equipos para generar el fixture.';
     }
 
     form.querySelectorAll('input[name="fixtureMode"]').forEach(r => {
@@ -602,21 +824,36 @@ select.form-input { appearance: none; }
       if (color) color.value = colors[teamList.children.length % colors.length];
       teamList.appendChild(node);
       syncGroupSelects();
+      syncSportUi();
     });
 
     teamList.addEventListener('click', e => {
       const btn = e.target.closest('.team-row__remove');
       if (!btn) return;
-      if (teamList.querySelectorAll('.team-row').length <= 2) return;
+      if (teamList.querySelectorAll('.team-row').length <= minTeamRows()) return;
       btn.closest('.team-row')?.remove();
     });
 
     teamList.addEventListener('input', e => {
       if (e.target.name === 'teamShort') e.target.value = e.target.value.toUpperCase();
     });
+    teamList.addEventListener('focusout', e => {
+      if (e.target.name !== 'teamName') return;
+      e.target.value = titleCaseName(e.target.value);
+    });
 
+    sportSelect?.addEventListener('change', () => {
+      applyFormatDefault();
+      applyFixtureDefault();
+      trimEmptyRosterRows();
+      syncGroupSelects();
+      syncSportUi();
+      updateFixturePreview();
+    });
     showStep(typeof startStep === 'number' ? startStep : 1);
     syncGroupSelects();
+    syncSportUi();
+    syncCalendarUi();
     updateFixturePreview();
   }
 </script>

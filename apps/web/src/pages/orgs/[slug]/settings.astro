@@ -1,0 +1,331 @@
+---
+/**
+ * Ajustes de marca de la empresa. OWNER / ADMIN.
+ */
+import Base from '../../../layouts/Base.astro';
+import { requireOrgAdmin } from '../../../lib/auth';
+import { api, uploadOrgLogo } from '../../../lib/api';
+import { mediaUrl } from '../../../lib/media';
+
+const gate = await requireOrgAdmin(Astro);
+if (gate instanceof Response) return gate;
+const { org } = gate;
+
+let error: string | null = null;
+let name = org.name;
+let city = org.city ?? '';
+let brandColor = org.brandColor ?? '';
+let description = org.description ?? '';
+let logoPreview = org.logoUrl ?? '';
+const saved = Astro.url.searchParams.get('ok') === '1';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  name = String(form.get('name') ?? '').trim();
+  city = String(form.get('city') ?? '').trim();
+  brandColor = String(form.get('brandColor') ?? '').trim();
+  description = String(form.get('description') ?? '').trim();
+
+  try {
+    if (!name) throw new Error('El nombre es obligatorio');
+
+    let logoUrl: string | null | undefined;
+    const file = form.get('logo');
+    if (file instanceof File && file.size > 0) {
+      logoUrl = await uploadOrgLogo(file, Astro.request);
+    } else if (String(form.get('clearLogo') ?? '') === '1') {
+      logoUrl = null;
+    }
+
+    await api.patch(
+      `/organizations/${org.slug}`,
+      {
+        name,
+        city: city || null,
+        brandColor: brandColor || null,
+        description: description || null,
+        ...(logoUrl !== undefined ? { logoUrl } : {}),
+      },
+      Astro.request
+    );
+    return Astro.redirect(`/orgs/${org.slug}/settings?ok=1`);
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'No se pudo guardar';
+  }
+}
+
+const initials = name
+  .split(' ')
+  .filter(w => w.length > 2)
+  .slice(0, 2)
+  .map(w => w[0]!.toUpperCase())
+  .join('') || name.slice(0, 2).toUpperCase();
+
+const colorValue = /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#00e5ff';
+---
+
+<Base
+  title={`Ajustes · ${org.name} | Chapi`}
+  description={`Marca y datos de ${org.name}.`}
+  noIndex={true}
+>
+  <main class="auth-page">
+    <div class="auth-card">
+      <div class="auth-card__header">
+        <span class="accent-line"></span>
+        <p class="auth-kicker">
+          <a href={`/orgs/${org.slug}`}>{org.name}</a>
+        </p>
+        <h1 class="display-md" style="margin-top: 8px;">Ajustes de empresa</h1>
+        <p class="auth-lead">Logo, color, ciudad y texto de la landing pública.</p>
+      </div>
+
+      {error && <div class="auth-error" role="alert">{error}</div>}
+      {saved && !error && <p class="auth-ok">Cambios guardados.</p>}
+
+      <form method="POST" enctype="multipart/form-data" class="auth-form">
+        <div class="logo-row">
+          <label class="logo-row__mark" style={`--tm-color: ${colorValue}`}>
+            {logoPreview ? (
+              <img src={mediaUrl(logoPreview)} alt="" class="logo-row__img" />
+            ) : (
+              <span>{initials}</span>
+            )}
+            <input
+              type="file"
+              name="logo"
+              class="logo-row__file"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+              aria-label={`Logo de ${name}`}
+            />
+          </label>
+          <div class="logo-row__copy">
+            <p class="logo-row__title">Logo</p>
+            <p class="logo-row__hint">Se ve en la landing y en los correos. JPG, PNG, WEBP, GIF o SVG.</p>
+            {logoPreview && (
+              <label class="logo-row__clear">
+                <input type="checkbox" name="clearLogo" value="1" />
+                Quitar logo
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="name">Nombre</label>
+          <input type="text" id="name" name="name" required value={name} class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="city">Ciudad</label>
+          <input type="text" id="city" name="city" value={city} placeholder="Bogotá" class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="brandColor">Color de marca</label>
+          <div class="color-row">
+            <input type="color" id="brandColorPicker" value={colorValue} aria-label="Elegir color" />
+            <input
+              type="text"
+              id="brandColor"
+              name="brandColor"
+              value={brandColor}
+              placeholder="#00e5ff"
+              pattern="^#?[0-9A-Fa-f]{6}$"
+              class="form-input"
+            />
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="label" for="description">Descripción</label>
+          <textarea
+            id="description"
+            name="description"
+            rows="4"
+            placeholder="Quiénes son, qué torneos organizan…"
+            class="form-input form-input--area">{description}</textarea>
+        </div>
+
+        <div class="auth-actions">
+          <button type="submit" class="btn-accent" style="padding: 12px 20px;">
+            Guardar
+          </button>
+          <a href={`/orgs/${org.slug}`} class="btn-ghost">Ver landing</a>
+        </div>
+      </form>
+    </div>
+  </main>
+</Base>
+
+<style>
+.auth-page {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+}
+.auth-card__header { margin-bottom: 24px; }
+.auth-kicker {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+.auth-kicker a { color: var(--accent); }
+.auth-lead {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 6px 0 0;
+}
+.auth-error {
+  background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #ff6b6b;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+.auth-ok {
+  color: var(--accent);
+  font-size: 0.875rem;
+  margin: 0 0 16px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-input {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+.form-input--area {
+  border-radius: var(--radius-lg);
+  resize: vertical;
+  min-height: 96px;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text-muted); }
+.color-row { display: flex; align-items: center; gap: 10px; }
+.color-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo-row__mark {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--tm-color) 22%, var(--bg-overlay));
+  color: var(--tm-color);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--tm-color) 45%, var(--border));
+}
+.logo-row__mark:hover { border-style: solid; }
+.logo-row__img { width: 100%; height: 100%; object-fit: cover; }
+.logo-row__file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.logo-row__copy { min-width: 0; flex: 1; }
+.logo-row__title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+.logo-row__hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+.logo-row__clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+</style>
+
+<script>
+  const picker = document.getElementById('brandColorPicker') as HTMLInputElement | null;
+  const text = document.getElementById('brandColor') as HTMLInputElement | null;
+  if (picker && text) {
+    picker.addEventListener('input', () => { text.value = picker.value; });
+    text.addEventListener('input', () => {
+      if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) picker.value = text.value;
+    });
+  }
+
+  document.querySelectorAll<HTMLInputElement>('.logo-row__file').forEach(input => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const mark = input.closest('.logo-row__mark');
+      if (!mark) return;
+      const url = URL.createObjectURL(file);
+      let img = mark.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 'logo-row__img';
+        mark.querySelector('span')?.remove();
+        mark.insertBefore(img, input);
+      }
+      img.src = url;
+      img.alt = '';
+    });
+  });
+</script>

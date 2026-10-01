@@ -1,188 +1,80 @@
 ---
 /**
- * pages/profile.astro — perfil del usuario autenticado.
- *
- * Despacha al layout correcto según el rol del usuario:
- *   VIEWER    → schedule + historial + torneos seguidos
- *   PLAYER    → header deportivo + carrera + inscripciones por torneo
- *   REFEREE   → partidos asignados + historial arbitrado
- *   ORGANIZER → (no es User.role: ver bloque "Mis empresas")
- *   ADMIN     → (futuro)
- *
- * Auth guard: requireAuth redirige a /login si no hay JWT.
- * Las empresas se muestran para cualquier rol: organizar es membresía.
+ * Perfil visualizador — default de todo usuario.
+ * Jugador → /me/player · Árbitro → /me/referee · Organizador → /me/organizer
  */
-import Base           from '../layouts/Base.astro';
-import ProfileHeader  from '../components/user/ProfileHeader.astro';
-import UserSchedule   from '../components/user/UserSchedule.astro';
-import UserHistory    from '../components/user/UserHistory.astro';
-import PlayerProfileHeader  from '../components/user/PlayerProfileHeader.astro';
-import PlayerCareerSummary  from '../components/user/PlayerCareerSummary.astro';
-import OrganizationsPanel   from '../components/user/OrganizationsPanel.astro';
+import Base from '../layouts/Base.astro';
+import ProfileShell from '../layouts/ProfileShell.astro';
+import ProfileHeader from '../components/user/ProfileHeader.astro';
+import UserSchedule from '../components/user/UserSchedule.astro';
+import UserHistory from '../components/user/UserHistory.astro';
 import { requireAuth } from '../lib/auth';
-import { getUserProfile, getPlayerProfile, getRefereeMatches, getMyOrganizations } from '../lib/api';
-import {
-  MOCK_USER_VIEWER,
-  MOCK_USER_SCHEDULE,
-  MOCK_USER_HISTORY,
-} from '../data/mock';
+import { getUserProfile } from '../lib/api';
+import { MOCK_USER_VIEWER, MOCK_USER_SCHEDULE, MOCK_USER_HISTORY } from '../data/mock';
 
-// ── Auth guard ─────────────────────────────────────────────
 const auth = await requireAuth(Astro);
 if (auth instanceof Response) return auth;
 
-const isPlayer  = auth.role === 'PLAYER';
-const isReferee = auth.role === 'REFEREE';
-const isViewer  = auth.role === 'VIEWER';
-
-// VIEWER: "torneos seguidos" / "historial visto" no tienen modelo propio
-// en la API todavía (no hay Follow ni WatchHistory) — se deja mockeado
-// a propósito hasta que se defina ese alcance.
-const viewerUser = isViewer ? { ...MOCK_USER_VIEWER, id: auth.id, name: auth.name, email: auth.email } : null;
-
-// REFEREE y PLAYER sí tienen datos reales de punta a punta.
-const refereeUser     = isReferee ? await getUserProfile(auth.id, Astro.request) : null;
-const refereeMatches  = isReferee ? await getRefereeMatches(auth.id, Astro.request) : null;
-const playerUser      = isPlayer  ? await getPlayerProfile(auth.id, Astro.request) : null;
-
-const organizations = await getMyOrganizations(Astro.request);
-const genericUser = !isPlayer && !isReferee && !isViewer
-  ? await getUserProfile(auth.id, Astro.request)
-  : null;
+const fetched = await getUserProfile(auth.id, Astro.request);
+const viewerUser = {
+  ...(fetched ?? MOCK_USER_VIEWER),
+  id: auth.id,
+  name: auth.name,
+  email: auth.email,
+  role: 'VIEWER' as const,
+};
 ---
 
-<Base
-  title="Mi perfil | Parches"
-  description="Tu perfil en Parches"
-  noIndex={true}
->
-
-  {/* ── PLAYER PROFILE ───────────────────────────────────── */}
-  {isPlayer && playerUser && (
-    <>
-      <PlayerProfileHeader player={playerUser} isOwn={true} />
-      <main class="profile-page">
-        <div class="profile-page__inner">
-          <PlayerCareerSummary player={playerUser} />
-          <OrganizationsPanel organizations={organizations} />
-        </div>
-      </main>
-    </>
-  )}
-
-  {/* ── VIEWER PROFILE ───────────────────────────────────── */}
-  {isViewer && viewerUser && (
-    <>
-      <ProfileHeader user={viewerUser} isOwn={true} />
-      <main class="profile-page">
-        <div class="profile-page__inner">
-          <div class="profile-layout">
-            <div class="profile-main">
-              <UserSchedule matches={MOCK_USER_SCHEDULE} userRole="VIEWER" />
-              <UserHistory  matches={MOCK_USER_HISTORY}  userRole="VIEWER" />
-            </div>
-            <aside class="profile-sidebar" aria-label="Torneos seguidos">
-              <h2 class="sidebar-title">Torneos seguidos</h2>
-              <div class="followed-list">
-                {[
-                  { name: 'Liga BetPlay',   slug: 'liga-betplay-2025',         sport: 'football',   status: 'LIVE'     },
-                  { name: 'LNB Baloncesto', slug: 'lnb-2025',                  sport: 'basketball', status: 'LIVE'     },
-                  { name: 'Copa Davis',     slug: 'copa-davis-col-2025',        sport: 'tennis',     status: 'LIVE'     },
-                  { name: 'Sudamericano',   slug: 'sudamericano-voleibol-2025', sport: 'volleyball', status: 'UPCOMING' },
-                ].map(t => (
-                  <a href={`/tournaments/${t.slug}`} class="followed-item">
-                    <div class={`followed-icon sport-${t.sport}`}>{t.name.charAt(0)}</div>
-                    <div class="followed-info">
-                      <span class="followed-name">{t.name}</span>
-                      <span class:list={['followed-status', t.status === 'LIVE' ? 'followed-status--live' : 'followed-status--soon']}>
-                        {t.status === 'LIVE' ? '● En vivo' : 'Próximamente'}
-                      </span>
-                    </div>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-                  </a>
-                ))}
+<Base title="Visualizador | Chapi" description="Tu perfil de visualizador en Chapi" noIndex={true}>
+  <ProfileHeader user={viewerUser} isOwn={true} />
+  <ProfileShell>
+    <div class="profile-layout">
+      <div class="profile-main">
+        <UserSchedule matches={MOCK_USER_SCHEDULE} userRole="VIEWER" />
+        <UserHistory matches={MOCK_USER_HISTORY} userRole="VIEWER" />
+      </div>
+      <aside class="profile-sidebar" aria-label="Torneos seguidos">
+        <h2 class="sidebar-title">Torneos seguidos</h2>
+        <div class="followed-list">
+          {[
+            { name: 'Liga BetPlay', slug: 'liga-betplay-2025', sport: 'football', status: 'LIVE' },
+            { name: 'LNB Baloncesto', slug: 'lnb-2025', sport: 'basketball', status: 'LIVE' },
+            { name: 'Copa Davis', slug: 'copa-davis-col-2025', sport: 'tennis', status: 'LIVE' },
+            { name: 'Sudamericano', slug: 'sudamericano-voleibol-2025', sport: 'volleyball', status: 'UPCOMING' },
+          ].map(t => (
+            <a href={`/tournaments/${t.slug}`} class="followed-item">
+              <div class={`followed-icon sport-${t.sport}`}>{t.name.charAt(0)}</div>
+              <div class="followed-info">
+                <span class="followed-name">{t.name}</span>
+                <span class:list={['followed-status', t.status === 'LIVE' ? 'followed-status--live' : 'followed-status--soon']}>
+                  {t.status === 'LIVE' ? '● En vivo' : 'Próximamente'}
+                </span>
               </div>
-            </aside>
-          </div>
-          <OrganizationsPanel organizations={organizations} />
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          ))}
         </div>
-      </main>
-    </>
-  )}
-
-  {/* ── REFEREE PROFILE ──────────────────────────────────── */}
-  {isReferee && refereeUser && refereeMatches && (
-    <>
-      <ProfileHeader user={refereeUser} isOwn={true} />
-      <main class="profile-page">
-        <div class="profile-page__inner">
-          <UserSchedule matches={refereeMatches.schedule} userRole="REFEREE" />
-          <UserHistory  matches={refereeMatches.history}  userRole="REFEREE" />
-          <OrganizationsPanel organizations={organizations} />
-        </div>
-      </main>
-    </>
-  )}
-
-  {/* ── Otros roles (ADMIN, etc.) ───────────────────────────── */}
-  {genericUser && (
-    <>
-      <ProfileHeader user={genericUser} isOwn={true} />
-      <main class="profile-page">
-        <div class="profile-page__inner">
-          <OrganizationsPanel organizations={organizations} />
-        </div>
-      </main>
-    </>
-  )}
-
+      </aside>
+    </div>
+  </ProfileShell>
 </Base>
 
 <style>
-.profile-page { flex: 1; padding-bottom: 60px; }
-.profile-page__inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 28px 28px;
-}
-
-/* Player enrollment sections */
-.enr-section { margin-bottom: 32px; }
-.enr-section__title {
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-primary);
-  margin-bottom: 14px;
-}
-.enr-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-}
-
-/* Viewer layout */
 .profile-layout {
   display: grid;
   grid-template-columns: 1fr 300px;
   gap: 24px;
   align-items: start;
 }
-.profile-main {}
 .profile-sidebar { position: sticky; top: 72px; }
 .sidebar-title {
   font-family: var(--font-display);
   font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
   margin-bottom: 12px;
 }
-
-/* Followed tournaments */
 .followed-list {
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -200,7 +92,6 @@ const genericUser = !isPlayer && !isReferee && !isViewer
 }
 .followed-item:last-child { border-bottom: none; }
 .followed-item:hover { background: var(--bg-raised); }
-
 .followed-icon {
   width: 28px; height: 28px;
   border-radius: 5px;
@@ -217,14 +108,11 @@ const genericUser = !isPlayer && !isReferee && !isViewer
 .sport-basketball { background: linear-gradient(135deg,#1e120a,#4d2e0a); }
 .sport-tennis     { background: linear-gradient(135deg,#141e08,#2e4d0a); }
 .sport-volleyball { background: linear-gradient(135deg,#08122b,#0a2e4d); }
-
 .followed-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .followed-name {
   font-family: var(--font-display);
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -234,16 +122,11 @@ const genericUser = !isPlayer && !isReferee && !isViewer
   font-family: var(--font-display);
   font-size: 0.58rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .followed-status--live { color: var(--live); }
 .followed-status--soon { color: var(--text-muted); }
-
 @media (max-width: 900px) {
   .profile-layout { grid-template-columns: 1fr; }
   .profile-sidebar { position: static; }
-  .profile-page__inner { padding: 20px 16px; }
-  .enr-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -2,6 +2,8 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import { PORTS } from '@parches/config';
+import { mailMode } from './lib/mail.js';
+import { startMatchReminderJob } from './lib/matchReminders.js';
 import { tournamentRoutes } from './routes/tournaments.js';
 import { matchRoutes } from './routes/matches.js';
 import { teamRoutes } from './routes/teams.js';
@@ -9,6 +11,7 @@ import { groupRoutes } from './routes/groups.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
 import { organizationRoutes } from './routes/organizations.js';
+import { uploadRoutes, uploadStaticRoutes } from './routes/uploads.js';
 
 // `app.authenticate` no lo agrega @fastify/jwt automáticamente — hay que
 // declararlo. Sin esto, `{ onRequest: [app.authenticate] }` en auth.ts
@@ -19,7 +22,7 @@ declare module 'fastify' {
   }
 }
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 8 * 1024 * 1024 });
 
 await app.register(cors, { origin: true });
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'dev-secret-change-in-prod' });
@@ -47,11 +50,20 @@ await app.register(
     await api.register(teamRoutes, { prefix: '/teams' });
     await api.register(groupRoutes, { prefix: '/groups' });
     await api.register(userRoutes, { prefix: '/users' });
+    await api.register(uploadRoutes, { prefix: '/uploads' });
   },
   { prefix: '/api' }
 );
 
-app.get('/health', async () => ({ ok: true, ts: new Date().toISOString() }));
+await app.register(uploadStaticRoutes);
+
+app.get('/health', async () => ({
+  ok: true,
+  ts: new Date().toISOString(),
+  mail: mailMode(),
+}));
 
 app.listen({ port: PORTS.API ?? 3000, host: '0.0.0.0' });
 console.log(`🟢 api listening on :${PORTS.API ?? 3000}`);
+console.log(mailMode() === 'live' ? '✉️  mail: Resend' : '✉️  mail: dry-run (sin RESEND_API_KEY)');
+startMatchReminderJob();

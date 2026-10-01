@@ -147,7 +147,6 @@ export default function EventTimeline({
           font-size: 0.72rem;
           font-weight: 800;
           letter-spacing: 0.06em;
-          text-transform: uppercase;
           color: #f0f2f5;
         }
         .et__title {
@@ -155,7 +154,6 @@ export default function EventTimeline({
           font-size: 0.62rem;
           font-weight: 600;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
           color: #454a52;
         }
 
@@ -165,7 +163,6 @@ export default function EventTimeline({
           font-size: 0.8rem;
           font-weight: 600;
           letter-spacing: 0.06em;
-          text-transform: uppercase;
           color: #454a52;
           text-align: center;
         }
@@ -278,7 +275,6 @@ export default function EventTimeline({
           font-size: 0.66rem;
           font-weight: 600;
           letter-spacing: 0.04em;
-          text-transform: uppercase;
           color: #c7cbd1;
         }
         .et__tooltip-player {

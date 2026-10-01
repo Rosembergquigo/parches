@@ -1,0 +1,251 @@
+---
+/**
+ * Ficha pública de una cancha / estadio.
+ * Contacto, dirección, mapa e imágenes. Visible para todos los perfiles.
+ */
+import Base from '../../layouts/Base.astro';
+import VenueHero from '../../components/venue/VenueHero.astro';
+import {
+  getVenueBySlug,
+  osmEmbedUrl,
+  osmOpenUrl,
+  whatsappUrl,
+} from '../../data/venues';
+
+const { slug } = Astro.params;
+const venue = getVenueBySlug(slug ?? '');
+if (!venue) return Astro.redirect('/404');
+
+const hasMap = typeof venue.lat === 'number' && typeof venue.lng === 'number';
+const gallery = venue.imageUrls.filter(url => url !== venue.coverImageUrl);
+const phoneHref = `tel:${venue.contact.phone.replace(/\s/g, '')}`;
+---
+
+<Base
+  title={`${venue.name} | Chapi`}
+  description={`${venue.address}, ${venue.city}. ${venue.description}`}
+  ogImage={venue.coverImageUrl}
+>
+  <VenueHero venue={venue} />
+
+  <main class="vpage">
+    <div class="vpage__grid">
+      <section class="vpanel" aria-labelledby="v-address">
+        <h2 id="v-address" class="vpanel__title">Dirección</h2>
+        <p class="vpanel__address">{venue.address}</p>
+        <p class="vpanel__city">
+          {[venue.neighborhood, venue.city].filter(Boolean).join(', ')}
+        </p>
+        {venue.howToArrive && <p class="vpanel__hint">{venue.howToArrive}</p>}
+        {venue.surface && (
+          <p class="vpanel__fact"><span>Superficie</span> {venue.surface}</p>
+        )}
+      </section>
+
+      <section class="vpanel" aria-labelledby="v-contact">
+        <h2 id="v-contact" class="vpanel__title">Contacto</h2>
+        <p class="vpanel__who">
+          {venue.contact.name}
+          {venue.contact.role ? ` · ${venue.contact.role}` : ''}
+        </p>
+        <div class="vpanel__links">
+          <a href={phoneHref}>{venue.contact.phone}</a>
+          {venue.contact.email && (
+            <a href={`mailto:${venue.contact.email}`}>{venue.contact.email}</a>
+          )}
+          {venue.contact.whatsapp && (
+            <a href={whatsappUrl(venue.contact.whatsapp)} target="_blank" rel="noreferrer">
+              WhatsApp
+            </a>
+          )}
+        </div>
+      </section>
+    </div>
+
+    <section class="vmap" aria-labelledby="v-map">
+      <div class="vmap__head">
+        <h2 id="v-map" class="vpanel__title">Mapa</h2>
+        {hasMap && (
+          <a
+            class="vmap__open"
+            href={osmOpenUrl(venue.lat!, venue.lng!)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Abrir mapa
+          </a>
+        )}
+      </div>
+      {hasMap ? (
+        <iframe
+          class="vmap__frame"
+          title={`Mapa de ${venue.name}`}
+          src={osmEmbedUrl(venue.lat!, venue.lng!)}
+          loading="lazy"
+        ></iframe>
+      ) : (
+        <div class="vmap__placeholder">
+          El mapa se publicará cuando la sede tenga coordenadas.
+        </div>
+      )}
+    </section>
+
+    {venue.description && (
+      <section class="vabout" aria-labelledby="v-about">
+        <h2 id="v-about" class="vpanel__title">El lugar</h2>
+        <p>{venue.description}</p>
+      </section>
+    )}
+
+    {gallery.length > 0 && (
+      <section class="vgallery" aria-label="Imágenes del lugar">
+        <h2 class="vpanel__title">Imágenes</h2>
+        <div class="vgallery__grid">
+          {gallery.map(url => (
+            <img src={url} alt={`Foto de ${venue.name}`} loading="lazy" />
+          ))}
+        </div>
+      </section>
+    )}
+  </main>
+</Base>
+
+<style>
+.vpage {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+.vpage__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.vpanel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+}
+.vpanel__title {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+.vpanel__address {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+.vpanel__city {
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+.vpanel__hint {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+.vpanel__fact {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.vpanel__fact span {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.vpanel__who {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+.vpanel__links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vpanel__links a {
+  color: var(--accent);
+  font-size: 0.92rem;
+}
+.vmap {
+  margin-bottom: 28px;
+}
+.vmap__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.vmap__head .vpanel__title { margin: 0; }
+.vmap__open {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.vmap__frame,
+.vmap__placeholder {
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+.vmap__frame { display: block; }
+.vmap__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px;
+}
+.vabout {
+  max-width: 720px;
+  margin-bottom: 32px;
+}
+.vabout p {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  margin: 0;
+}
+.vgallery__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.vgallery__grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 800px) {
+  .vpage__grid { grid-template-columns: 1fr; }
+  .vgallery__grid { grid-template-columns: 1fr 1fr; }
+  .vmap__frame,
+  .vmap__placeholder { height: 260px; }
+}
+@media (max-width: 520px) {
+  .vgallery__grid { grid-template-columns: 1fr; }
+}
+</style>

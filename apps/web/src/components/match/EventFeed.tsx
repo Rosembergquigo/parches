@@ -153,7 +153,6 @@ export default function EventFeed({
           font-size: 0.8rem;
           font-weight: 800;
           letter-spacing: 0.08em;
-          text-transform: uppercase;
           color: #f0f2f5;
         }
         .ef__live-badge {
@@ -164,7 +163,6 @@ export default function EventFeed({
           font-size: 0.6rem;
           font-weight: 700;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
           color: #ff3b3b;
         }
         .ef__live-dot {
@@ -185,7 +183,6 @@ export default function EventFeed({
           font-size: 0.8rem;
           font-weight: 600;
           letter-spacing: 0.06em;
-          text-transform: uppercase;
           color: #454a52;
           text-align: center;
         }
@@ -258,14 +255,12 @@ export default function EventFeed({
           font-size: 0.65rem;
           font-weight: 700;
           letter-spacing: 0.09em;
-          text-transform: uppercase;
         }
         .ef__player {
           font-family: 'Barlow Condensed', sans-serif;
           font-size: 0.82rem;
           font-weight: 700;
           letter-spacing: 0.03em;
-          text-transform: uppercase;
           color: #f0f2f5;
           white-space: nowrap;
           overflow: hidden;

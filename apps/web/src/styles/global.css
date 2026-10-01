@@ -38,6 +38,10 @@
   --radius-pill: 8rem;
 
   --transition: 150ms ease;
+
+  --nav-top: 5px;
+  --nav-bar-height: 60px;
+  --nav-offset: calc(var(--nav-top) + var(--nav-bar-height));
 }
 
 /* ── Reset ─────────────────────────────────────────────────── */
@@ -45,14 +49,20 @@
 
 html {
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: 17px;
   background: var(--bg-base);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   scroll-behavior: smooth;
 }
 
-body { min-height: 100vh; }
+body {
+  min-height: 100vh;
+  padding-top: var(--nav-offset);
+}
+@media (max-width: 768px) {
+  :root { --nav-bar-height: 52px; }
+}
 a { color: inherit; text-decoration: none; }
 img { display: block; max-width: 100%; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
@@ -64,14 +74,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1;
-  text-transform: uppercase;
 }
 .display-lg {
   font-family: var(--font-display);
   font-size: clamp(1.75rem, 4vw, 2.75rem);
   font-weight: 700;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   line-height: 1.1;
 }
 .display-md {
@@ -79,14 +87,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: clamp(1.1rem, 2.5vw, 1.5rem);
   font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
 }
 .label {
   font-family: var(--font-display);
-  font-size: 0.72rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--text-secondary);
 }
 
@@ -100,10 +106,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border: 1px solid var(--live);
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
-  font-size: 0.7rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--live);
 }
 .badge-live::before {
@@ -128,10 +133,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
-  font-size: 0.7rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--text-secondary);
 }
 
@@ -147,7 +151,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   border-radius: var(--radius-pill);
   transition: opacity var(--transition), transform var(--transition);
 }
@@ -164,7 +167,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   transition: border-color var(--transition), background var(--transition);

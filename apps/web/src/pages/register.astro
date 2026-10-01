@@ -3,28 +3,38 @@
  * pages/register.astro
  */
 import Base from '../layouts/Base.astro';
-import { getJwtPayload, buildTokenCookie } from '../lib/auth';
+import { buildTokenCookie, getOptionalUser, safeNextPath } from '../lib/auth';
 import { api } from '../lib/api';
 
-const existing = await getJwtPayload(Astro.request);
-if (existing) return Astro.redirect('/');
-
 let error: string | null = null;
+let name = '';
+let email = '';
+let next = safeNextPath(Astro.url.searchParams.get('next'));
+
+if (Astro.request.method === 'GET') {
+  const existing = await getOptionalUser(Astro.request);
+  if (existing) return Astro.redirect(next);
+}
 
 if (Astro.request.method === 'POST') {
   try {
     const form = await Astro.request.formData();
+    next = safeNextPath(String(form.get('next') ?? next));
+    name = String(form.get('name') ?? '').trim();
+    email = String(form.get('email') ?? '').trim();
+    const password = String(form.get('password') ?? '');
+    const passwordConfirm = String(form.get('passwordConfirm') ?? '');
+    if (password !== passwordConfirm) {
+      throw new Error('Las claves no coinciden');
+    }
     const { token } = await api.post<{ token: string; user: unknown }>(
       '/auth/register',
-      {
-        name:  form.get('name') as string,
-        email: form.get('email') as string,
-      }
+      { name, email, password }
     );
     return new Response(null, {
       status: 302,
       headers: {
-        'Location': '/',
+        'Location': next,
         'Set-Cookie': buildTokenCookie(token),
       },
     });
@@ -50,15 +60,32 @@ if (Astro.request.method === 'POST') {
       )}
 
       <form method="POST" class="auth-form">
+        <input type="hidden" name="next" value={next} />
         <div class="form-field">
           <label class="label" for="name">Nombre completo</label>
           <input type="text" id="name" name="name" required
-            autocomplete="name" placeholder="Juan Pérez" class="form-input" />
+            autocomplete="name" placeholder="Juan Pérez" class="form-input"
+            value={name} />
         </div>
         <div class="form-field">
           <label class="label" for="email">Email</label>
           <input type="email" id="email" name="email" required
-            autocomplete="email" placeholder="tu@email.com" class="form-input" />
+            autocomplete="email" placeholder="tu@email.com" class="form-input"
+            value={email} />
+        </div>
+        <div class="form-field">
+          <label class="label" for="password">Clave</label>
+          <input type="password" id="password" name="password" required
+            minlength="8" maxlength="72"
+            autocomplete="new-password"
+            placeholder="Mínimo 8 caracteres" class="form-input" />
+        </div>
+        <div class="form-field">
+          <label class="label" for="passwordConfirm">Confirmar clave</label>
+          <input type="password" id="passwordConfirm" name="passwordConfirm" required
+            minlength="8" maxlength="72"
+            autocomplete="new-password"
+            placeholder="Repite la clave" class="form-input" />
         </div>
         <button type="submit" class="btn-accent" style="width:100%; justify-content:center; padding: 12px;">
           Crear cuenta
@@ -67,7 +94,7 @@ if (Astro.request.method === 'POST') {
 
       <p class="auth-footer">
         ¿Ya tienes cuenta?&nbsp;
-        <a href="/login" style="color: var(--accent);">Ingresa</a>
+        <a href={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} style="color: var(--accent);">Ingresa</a>
       </p>
     </div>
   </main>

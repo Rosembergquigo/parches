@@ -15,6 +15,7 @@ interface Team {
   id: string;
   name: string;
   shortName: string;
+  logoUrl?: string;
 }
 
 interface Props {
@@ -125,7 +126,11 @@ export default function LiveScoreboard({
       <div className="sb__main">
         {/* Home team */}
         <div className="sb__team sb__team--home">
-          <div className="sb__logo" aria-hidden="true">{homeTeam.shortName}</div>
+          <div className="sb__logo" aria-hidden="true">
+            {homeTeam.logoUrl
+              ? <img src={homeTeam.logoUrl} alt="" />
+              : homeTeam.shortName}
+          </div>
           <span className="sb__name">{homeTeam.name}</span>
         </div>
 
@@ -147,7 +152,11 @@ export default function LiveScoreboard({
 
         {/* Away team */}
         <div className="sb__team sb__team--away">
-          <div className="sb__logo" aria-hidden="true">{awayTeam.shortName}</div>
+          <div className="sb__logo" aria-hidden="true">
+            {awayTeam.logoUrl
+              ? <img src={awayTeam.logoUrl} alt="" />
+              : awayTeam.shortName}
+          </div>
           <span className="sb__name">{awayTeam.name}</span>
         </div>
       </div>
@@ -174,7 +183,6 @@ export default function LiveScoreboard({
           font-size: 0.62rem;
           font-weight: 700;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
           color: #ff3b3b;
         }
         .sb__live-dot {
@@ -193,7 +201,6 @@ export default function LiveScoreboard({
           font-size: 0.72rem;
           font-weight: 700;
           letter-spacing: 0.08em;
-          text-transform: uppercase;
         }
         .sb__clock  { color: #ff3b3b; }
         .sb__period { color: #8a9099; }
@@ -203,7 +210,6 @@ export default function LiveScoreboard({
           font-size: 0.72rem;
           font-weight: 600;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
           color: #8a9099;
         }
 
@@ -225,10 +231,8 @@ export default function LiveScoreboard({
         .sb__team--away { align-items: center; }
 
         .sb__logo {
-          width: 56px; height: 56px;
+          width: 80px; height: 80px;
           border-radius: 10px;
-          background: #181c22;
-          border: 1px solid rgba(255,255,255,0.1);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -237,13 +241,20 @@ export default function LiveScoreboard({
           font-weight: 900;
           color: #8a9099;
           letter-spacing: 0.04em;
+          overflow: hidden;
+        }
+        .sb__logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 6px;
+          box-sizing: border-box;
         }
         .sb__name {
           font-family: 'Barlow Condensed', sans-serif;
           font-size: clamp(0.85rem, 2.5vw, 1.05rem);
           font-weight: 800;
           letter-spacing: 0.03em;
-          text-transform: uppercase;
           color: #f0f2f5;
           text-align: center;
           line-height: 1.1;
@@ -281,7 +292,6 @@ export default function LiveScoreboard({
           font-size: 0.68rem;
           font-weight: 600;
           letter-spacing: 0.08em;
-          text-transform: uppercase;
           color: #8a9099;
           margin-top: 6px;
         }

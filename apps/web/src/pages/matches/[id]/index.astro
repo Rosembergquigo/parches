@@ -36,7 +36,7 @@ if (!match) return Astro.redirect('/404');
 
 const {
   homeTeam, awayTeam, homeScore, awayScore,
-  status, clock, period, venue, tournamentName,
+  status, clock, period, venue, referee, tournamentName,
   tournamentSlug, sport, hlsUrl, streamKey,
   viewerCount, events, stats,
 } = match;
@@ -143,6 +143,16 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
           ]}>
             {isLive ? '‚óè En vivo' : isFinished ? 'Finalizado' : 'Programado'}
           </span>
+        </div>
+        <div class="match-info-card__row">
+          <span class="match-info-card__label">√Årbitro</span>
+          {referee ? (
+            <a href={`/users/${referee.id}`} class="match-info-card__value match-info-card__link">
+              {referee.name}
+            </a>
+          ) : (
+            <span class="match-info-card__value match-info-card__value--fin">Sin √°rbitro</span>
+          )}
         </div>
       </div>
 
@@ -269,7 +279,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .match-breadcrumb a {
@@ -295,7 +304,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--accent);
   padding: 2px 8px;
   border: 1px solid rgba(0,229,255,.25);
@@ -307,7 +315,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
@@ -354,7 +361,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   padding: 12px 8px;
   background: transparent;
@@ -405,7 +411,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 .match-info-card__value {
@@ -413,7 +418,6 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} ¬
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
 }
 .match-info-card__link {

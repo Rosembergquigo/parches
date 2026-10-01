@@ -14,7 +14,9 @@ import LiveStrip from '../components/match/LiveStrip.astro';
 import SportTabs from '../components/tournament/SportTabs.astro';
 import TournamentRow from '../components/tournament/TournamentRow.astro';
 
+import VenueCard from '../components/venue/VenueCard.astro';
 import { getTournamentsWithMatches } from '../lib/api';
+import { getFeaturedVenues } from '../data/venues';
 import type { Sport } from '../data/mock';
 
 const tournaments = await getTournamentsWithMatches(Astro.request);
@@ -34,6 +36,8 @@ const heroMatches = tournaments
   .slice(0, 3) as any[];
 
 const activeSports: Sport[] = [...new Set(tournaments.map(t => t.sport))];
+
+const featuredVenues = getFeaturedVenues().slice(0, 3);
 
 const liveCount = liveMatches.length;
 const pageTitle = liveCount > 0
@@ -84,6 +88,20 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
       )}
     </section>
 
+    {featuredVenues.length > 0 && (
+      <section class="venues-home" aria-label="Canchas y estadios">
+        <div class="tournaments__header">
+          <h2 class="tournaments__title">Canchas y estadios</h2>
+          <a href="/venues" class="tournaments__explore">Ver todas →</a>
+        </div>
+        <div class="venues-home__grid">
+          {featuredVenues.map(venue => (
+            <VenueCard venue={venue} />
+          ))}
+        </div>
+      </section>
+    )}
+
   </main>
 
 </Base>
@@ -118,7 +136,6 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
   font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-primary);
 }
 .tournaments__explore {
@@ -126,7 +143,6 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   text-decoration: none;
   transition: color var(--transition);
@@ -137,5 +153,19 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+.venues-home { padding-top: 36px; }
+.venues-home__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 24px;
+}
+@media (max-width: 960px) {
+  .venues-home__grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .venues-home__grid { grid-template-columns: 1fr; padding: 0 16px; }
+  .tournaments__header { padding: 0 16px; }
 }
 </style>

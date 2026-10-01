@@ -98,7 +98,6 @@ if (matches.length === 0) return;
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-primary);
 }
 .live-dot-big {
@@ -119,7 +118,6 @@ if (matches.length === 0) return;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   text-decoration: none;
   transition: color var(--transition);
@@ -175,7 +173,6 @@ if (matches.length === 0) return;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 .lsc__clock {
@@ -208,7 +205,6 @@ if (matches.length === 0) return;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--text-primary);
   flex: 1;
   white-space: nowrap;
@@ -234,7 +230,6 @@ if (matches.length === 0) return;
   font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -252,28 +247,11 @@ if (matches.length === 0) return;
 }
 .mc__team-row:last-of-type { margin-bottom: 0; }
 
-.mc__logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 0.5rem;
-  font-weight: 800;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
 .mc__name {
   font-family: var(--font-display);
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--text-primary);
   flex: 1;
   white-space: nowrap;
@@ -295,5 +273,9 @@ if (matches.length === 0) return;
   height: 1px;
   background: var(--border);
   margin: 6px 0;
+}
+
+@media (max-width: 640px) {
+  .live-strip-section { padding: 16px 16px 0; }
 }
 </style>

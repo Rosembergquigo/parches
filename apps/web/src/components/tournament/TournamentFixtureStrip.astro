@@ -88,12 +88,28 @@ const defaultIndex =
     {stages.map((s, i) => (
       <div class="tfs__panel" data-tfs-panel={i} hidden={i !== defaultIndex}>
         {s.matches.length > 0 ? (
-          <div class="tfs__strip" role="list" aria-label={`Partidos de ${s.label}`}>
-            {s.matches.map(m => (
-              <div role="listitem">
-                <MatchCard match={m} sport={sport} />
-              </div>
-            ))}
+          <div class="tfs__scroller">
+            <div class="tfs__fade tfs__fade--prev" hidden aria-hidden="true"></div>
+            <button type="button" class="tfs__nav tfs__nav--prev" hidden aria-label="Partidos anteriores">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <div class="tfs__strip" role="list" aria-label={`Partidos de ${s.label}`}>
+              {s.matches.map(m => (
+                <div role="listitem">
+                  <MatchCard match={m} sport={sport} />
+                </div>
+              ))}
+            </div>
+            <div class="tfs__fade tfs__fade--next" hidden aria-hidden="true"></div>
+            <button type="button" class="tfs__nav tfs__nav--next" hidden aria-label="Más partidos">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
           </div>
         ) : (
           <p class="tfs__empty">Sin partidos programados en esta fecha.</p>
@@ -150,7 +166,6 @@ const defaultIndex =
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-primary);
   margin: 0;
 }
@@ -166,7 +181,6 @@ const defaultIndex =
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   background: var(--bg-raised);
   border: 1px solid var(--border);
@@ -195,7 +209,6 @@ const defaultIndex =
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--text-primary);
   background: var(--bg-raised);
   border: 1px solid var(--border);
@@ -217,18 +230,59 @@ const defaultIndex =
 .tfs__panel { display: block; }
 .tfs__panel[hidden] { display: none; }
 
+.tfs__scroller { position: relative; }
 .tfs__strip {
   display: flex;
   gap: 10px;
   overflow-x: auto;
   padding: 2px 0 8px;
-  -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
-  mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  scroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 .tfs__strip::-webkit-scrollbar { height: 2px; }
 .tfs__strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.tfs__fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 96px;
+  pointer-events: none;
+  z-index: 3;
+}
+.tfs__fade--prev {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-base) 8%, transparent);
+}
+.tfs__fade--next {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-base) 8%, transparent);
+}
+.tfs__fade[hidden] { display: none; }
+.tfs__nav {
+  position: absolute;
+  top: 102px;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.tfs__nav:hover { background: rgba(0, 0, 0, 0.8); }
+.tfs__nav--prev { left: 30px; }
+.tfs__nav--next { right: 30px; }
+.tfs__nav[hidden] { display: none; }
+@media (max-width: 640px) {
+  .tfs__nav,
+  .tfs__fade { display: none; }
+}
 
 .tfs__empty {
   font-family: var(--font-display);
@@ -253,6 +307,58 @@ const defaultIndex =
     const root = document.getElementById('tournamentFixtureStrip');
     if (!root) return;
 
+    function bindScroller(scroller: HTMLElement) {
+      if (scroller.dataset.navBound === '1') return;
+      const strip = scroller.querySelector<HTMLElement>('.tfs__strip');
+      const prev = scroller.querySelector<HTMLButtonElement>('.tfs__nav--prev');
+      const next = scroller.querySelector<HTMLButtonElement>('.tfs__nav--next');
+      const fadePrev = scroller.querySelector<HTMLElement>('.tfs__fade--prev');
+      const fadeNext = scroller.querySelector<HTMLElement>('.tfs__fade--next');
+      if (!strip || !prev || !next || !fadePrev || !fadeNext) return;
+      scroller.dataset.navBound = '1';
+
+      const step = () => Math.max(280, Math.round(strip.clientWidth * 0.8));
+
+      const sync = () => {
+        const max = strip.scrollWidth - strip.clientWidth;
+        const hasOverflow = max > 8;
+        const atStart = strip.scrollLeft <= 8;
+        const atEnd = strip.scrollLeft >= max - 8;
+        prev.hidden = fadePrev.hidden = !hasOverflow || atStart;
+        next.hidden = fadeNext.hidden = !hasOverflow || atEnd;
+      };
+
+      const go = (dir: number) => {
+        const start = strip.scrollLeft;
+        const max = strip.scrollWidth - strip.clientWidth;
+        const target = Math.max(0, Math.min(max, start + dir * step()));
+        const duration = 420;
+        const t0 = performance.now();
+        const ease = (t: number) => 1 - (1 - t) ** 3;
+        const frame = (now: number) => {
+          const p = Math.min(1, (now - t0) / duration);
+          strip.scrollLeft = start + (target - start) * ease(p);
+          if (p < 1) requestAnimationFrame(frame);
+          else sync();
+        };
+        requestAnimationFrame(frame);
+      };
+
+      prev.addEventListener('click', () => go(-1));
+      next.addEventListener('click', () => go(1));
+      strip.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+      (scroller as HTMLElement & { _syncNav?: () => void })._syncNav = sync;
+      sync();
+    }
+
+    function syncVisible() {
+      root.querySelectorAll<HTMLElement>('.tfs__scroller').forEach(scroller => {
+        bindScroller(scroller);
+        (scroller as HTMLElement & { _syncNav?: () => void })._syncNav?.();
+      });
+    }
+
     const select = root.querySelector<HTMLSelectElement>('#tfsSelect');
     const panels = root.querySelectorAll<HTMLElement>('[data-tfs-panel]');
     select?.addEventListener('change', () => {
@@ -260,6 +366,7 @@ const defaultIndex =
       panels.forEach(panel => {
         panel.hidden = panel.getAttribute('data-tfs-panel') !== idx;
       });
+      requestAnimationFrame(syncVisible);
     });
 
     const bracketBtn = document.getElementById('tfsBracketToggle');
@@ -271,5 +378,7 @@ const defaultIndex =
       bracketBtn.classList.toggle('tfs__bracket-btn--active', willShow);
       bracketBtn.textContent = willShow ? 'Ocultar bracket' : 'Ver bracket completo';
     });
+
+    syncVisible();
   })();
 </script>

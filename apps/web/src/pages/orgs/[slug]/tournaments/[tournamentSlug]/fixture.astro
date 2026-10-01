@@ -7,6 +7,7 @@ import Base from '../../../../../layouts/Base.astro';
 import { requireAuth } from '../../../../../lib/auth';
 import { api, getOrganization, ApiError } from '../../../../../lib/api';
 import type { RawTournament } from '../../../../../lib/adapters';
+import VenueSelect from '../../../../../components/venue/VenueSelect.astro';
 
 const user = await requireAuth(Astro);
 if (user instanceof Response) return user;
@@ -115,8 +116,12 @@ const teamCount = tournament.teams?.length ?? 0;
             </div>
             <div class="form-field">
               <label class="label" for="venue">Sede (opcional)</label>
-              <input type="text" id="venue" name="venue" value={venue}
-                placeholder="Estadio, coliseo…" class="form-input" />
+              <VenueSelect
+                id="venue"
+                sport={tournament.sport}
+                value={venue}
+                emptyLabel="Sin sede"
+              />
             </div>
           </div>
 
@@ -156,7 +161,6 @@ const teamCount = tournament.teams?.length ?? 0;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
   margin: 10px 0 0;
 }

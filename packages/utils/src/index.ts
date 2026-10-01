@@ -29,3 +29,28 @@ export function generateEventId(): string {
 export function isScoreEvent(event: RefereeEvent): boolean {
   return ['goal', 'score_update'].includes(event.type);
 }
+
+/** Palabras que no llevan mayúscula salvo al inicio (nombres de equipos). */
+const TITLE_SMALL = new Set([
+  'de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'o', 'u',
+  'a', 'al', 'en', 'da', 'do', 'das', 'dos',
+]);
+const TITLE_ABBR = new Set(['fc', 'sc', 'cf', 'cd', 'ud', 'afc']);
+
+/**
+ * Title case para nombres: "águilas de cali" → "Águilas de Cali".
+ * Las siglas cortas (FC, CD) se dejan en mayúsculas.
+ */
+export function toTitleCase(value: string): string {
+  const text = value.trim().replace(/\s+/g, ' ');
+  if (!text) return '';
+
+  return text.split(/(\s+|-)/).map((token, index, parts) => {
+    if (!token || /^[\s-]+$/.test(token)) return token;
+    const lower = token.toLocaleLowerCase('es-CO');
+    if (TITLE_ABBR.has(lower)) return lower.toLocaleUpperCase('es-CO');
+    const isFirst = !parts.slice(0, index).some(part => /[^\s-]/.test(part));
+    if (!isFirst && TITLE_SMALL.has(lower)) return lower;
+    return lower.charAt(0).toLocaleUpperCase('es-CO') + lower.slice(1);
+  }).join('');
+}

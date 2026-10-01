@@ -44,6 +44,7 @@ export interface TournamentWithMatches {
   status: TournamentStatus;
   stage?: string;          // "Jornada 18" / "Semifinales" / "Cuartos de final"
   teamCount?: number;
+  logoUrl?: string;
   matches: MatchSnippet[];
 }
 
@@ -238,6 +239,7 @@ export interface PlayerStat {
   position: number;
   playerName: string;
   playerShortName: string;   // iniciales para el avatar placeholder
+  playerAvatarUrl?: string;  // foto de perfil; si no hay, se muestran iniciales
   userId?: string;           // si está presente, el nombre linkea a /users/[id]
   team: TeamSnippet;
   statValue: number;
@@ -322,6 +324,7 @@ export interface TournamentDetail extends TournamentWithMatches {
   playerStats?: StatConfig[];
   brandColor?: string;
   logoUrl?: string;
+  organization?: { id: string; slug: string; name: string };
   /**
    * Imagen de fondo del header (subida por el organizador). Progressive
    * enhancement: si no existe, el header usa el gradiente de `brandColor`.
@@ -560,6 +563,7 @@ export interface MatchDetail {
   clock?: string;
   period?: string;
   venue?: string;
+  referee?: { id: string; name: string };
   scheduledAt?: string;
   streamKey?: string;
   hlsUrl?: string;
@@ -704,6 +708,7 @@ export interface UserProfile {
   role: UserRole;
   createdAt: string;
   avatarUrl?: string;
+  color?: string;
   bio?: string;
   // VIEWER stats
   tournamentsFollowed?: number;
@@ -882,6 +887,7 @@ export interface PlayerProfileDetail {
   role: 'PLAYER';
   createdAt: string;
   avatarUrl?: string;
+  color?: string;
   bio?: string;
   nationality?: string;
   dateOfBirth?: string;
@@ -1010,6 +1016,7 @@ export interface TeamDetail {
   tournamentSlug: string;
   sport: Sport;
   brandColor?: string;
+  color?: string;
   standing?: TeamStandingSummary;
   squad: TeamPlayer[];
   recentMatches: TeamMatchItem[];
@@ -1051,9 +1058,12 @@ export interface TournamentNewsPost {
   category: TournamentNewsCategory;
   title: string;
   excerpt: string;
+  body?: string;
   author: string;
   publishedAt: string; // ISO
   pinned?: boolean;
+  coverImageUrl?: string;
+  imageUrls?: string[];
 }
 
 const MOCK_TOURNAMENT_NEWS: TournamentNewsPost[] = [

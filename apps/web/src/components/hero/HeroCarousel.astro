@@ -10,6 +10,7 @@
  * generado por Astro. Safe para SSR porque se ejecuta post-hydration.
  */
 import SportIcon from '../ui/SportIcon.astro';
+import TeamCrest from '../team/TeamCrest.astro';
 import type { MatchSnippet, Sport } from '../../data/mock';
 
 interface HeroMatch extends MatchSnippet {
@@ -79,7 +80,12 @@ const slideBg: Record<Sport, string> = {
 
               <!-- Teams + score -->
               <div class="hero__match">
-                <div class="hero__team">{m.homeTeam.name}</div>
+                <div class="hero__team">
+                  <span class="hero__crest">
+                    <TeamCrest shortName={m.homeTeam.shortName} logoUrl={m.homeTeam.logoUrl} />
+                  </span>
+                  <span class="hero__team-name">{m.homeTeam.name}</span>
+                </div>
                 <div class="hero__scorebox">
                   <div class="hero__score">
                     <span class:list={[homeWins && 'hero__score-win']}>{m.homeScore}</span>
@@ -89,7 +95,12 @@ const slideBg: Record<Sport, string> = {
                   <div class="hero__clock">● {m.clock}</div>
                   <div class="hero__period">{m.period}</div>
                 </div>
-                <div class="hero__team">{m.awayTeam.name}</div>
+                <div class="hero__team hero__team--away">
+                  <span class="hero__team-name">{m.awayTeam.name}</span>
+                  <span class="hero__crest">
+                    <TeamCrest shortName={m.awayTeam.shortName} logoUrl={m.awayTeam.logoUrl} />
+                  </span>
+                </div>
               </div>
 
               <!-- Actions -->
@@ -149,7 +160,7 @@ const slideBg: Record<Sport, string> = {
 <style>
 .hero {
   position: relative;
-  height: 500px;
+  height: 550px;
   overflow: hidden;
 }
 
@@ -184,8 +195,25 @@ const slideBg: Record<Sport, string> = {
 .hero__fade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(10,12,15,0.96) 0%, transparent 55%);
+  background: linear-gradient(
+    to top,
+    var(--bg-base) 0%,
+    color-mix(in srgb, var(--bg-base) 82%, transparent) 22%,
+    color-mix(in srgb, var(--bg-base) 35%, transparent) 52%,
+    transparent 82%
+  );
   pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 88px;
+  background: linear-gradient(to bottom, transparent, var(--bg-base));
+  pointer-events: none;
+  z-index: 3;
 }
 
 /* ── Content ────────────────────────────────────────────── */
@@ -215,7 +243,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--live);
 }
 .hero__live-dot {
@@ -241,7 +268,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--accent);
 }
 .hero__tournament {
@@ -249,7 +275,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
@@ -265,11 +290,47 @@ const slideBg: Record<Sport, string> = {
   font-size: clamp(1rem, 2.5vw, 1.4rem);
   font-weight: 800;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-primary);
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.hero__team:last-of-type { text-align: right; }
+.hero__team--away { justify-content: flex-end; text-align: right; }
+.hero__team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero__crest {
+  width: 100px;
+  height: 100px;
+  flex: 0 0 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  /*background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);*/
+  overflow: hidden;
+}
+.hero__crest :global(.crest) {
+  width: 100%;
+  height: 100%;
+}
+.hero__crest :global(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  box-sizing: border-box;
+}
+.hero__crest :global(.crest__abbr) {
+  font-size: 0.42rem;
+  font-weight: 800;
+}
 
 .hero__scorebox { text-align: center; flex-shrink: 0; }
 .hero__score {
@@ -291,7 +352,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--live);
   margin-top: 4px;
 }
@@ -300,7 +360,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -323,7 +382,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   border-radius: var(--radius-pill);
   text-decoration: none;
   transition: opacity 0.15s, transform 0.15s;
@@ -340,7 +398,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   text-decoration: none;
@@ -353,7 +410,6 @@ const slideBg: Record<Sport, string> = {
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
@@ -407,6 +463,59 @@ const slideBg: Record<Sport, string> = {
 .hero:has(.hero__slide:only-child) .hero__arr,
 .hero:has(.hero__slide:only-child) .hero__dots {
   display: none;
+}
+
+@media (max-width: 960px) {
+  .hero { height: 480px; }
+  .hero__content { padding: 0 52px 32px; }
+  .hero__match { gap: 12px; }
+  .hero__crest {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero { height: 360px; }
+  .hero__slide { align-items: center; }
+  .hero__content { padding: 16px 16px 40px; }
+  .hero__meta {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-bottom: 14px;
+  }
+  .hero__tournament {
+    flex: 1 1 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hero__match {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .hero__team,
+  .hero__team--away {
+    justify-content: center;
+    text-align: center;
+    flex: none;
+    width: 100%;
+    gap: 8px;
+    font-size: 1.05rem;
+  }
+  .hero__team--away { flex-direction: row-reverse; }
+  .hero__crest {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+  }
+  .hero__crest :global(.crest__abbr) { font-size: 0.48rem; }
+  .hero__score { font-size: 2rem; }
+  .hero__arr { display: none; }
+  .hero__dots { bottom: 10px; }
 }
 </style>
 

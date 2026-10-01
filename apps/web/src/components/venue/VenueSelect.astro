@@ -1,0 +1,77 @@
+---
+/**
+ * Dropdown de sede filtrado por deporte.
+ * Estilos propios: el class del padre no atraviesa el scope de Astro.
+ */
+import { getVenuesForSport } from '../../data/venues';
+
+interface Props {
+  sport: string;
+  name?: string;
+  value?: string | null;
+  id?: string;
+  emptyLabel?: string;
+}
+
+const {
+  sport,
+  name = 'venue',
+  value = '',
+  id,
+  emptyLabel = 'Sin sede',
+} = Astro.props;
+
+const venues = getVenuesForSport(sport);
+const current = (value ?? '').trim();
+const matched = venues.some(v => v.name === current || v.shortName === current);
+---
+
+<div class="venue-select">
+  <select name={name} id={id} class="venue-select__input">
+    <option value="">{emptyLabel}</option>
+    {venues.map(v => (
+      <option value={v.name} selected={v.name === current || v.shortName === current}>
+        {v.name}
+      </option>
+    ))}
+    {current && !matched && (
+      <option value={current} selected>{current}</option>
+    )}
+  </select>
+  <svg class="venue-select__arrow" width="10" height="10" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+</div>
+
+<style>
+.venue-select {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.venue-select__input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 8px 28px 8px 10px;
+  outline: none;
+  cursor: pointer;
+}
+.venue-select__input:focus { border-color: var(--accent); }
+.venue-select__arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+</style>
