@@ -1,0 +1,67 @@
+---
+import { isIndividualSport } from '@parches/config';
+import type { Sport, TeamSnippet } from '../../data/mock';
+import TeamCrest from '../team/TeamCrest.astro';
+import { SPORT_SEARCH_LABEL } from '../../lib/search';
+
+interface Props {
+  team: TeamSnippet;
+  sport: Sport;
+  tournamentName: string;
+}
+
+const { team, sport, tournamentName } = Astro.props;
+const kind = isIndividualSport(sport) ? 'Jugador' : 'Equipo';
+const sportLabel = SPORT_SEARCH_LABEL[sport] ?? sport;
+---
+
+<a href={`/teams/${team.id}`} class="thit">
+  <span class="thit__crest">
+    <TeamCrest shortName={team.shortName} logoUrl={team.logoUrl} />
+  </span>
+  <span class="thit__text">
+    <span class="thit__name">{team.name}</span>
+    <span class="thit__meta">{[kind, sportLabel, tournamentName].join(' · ')}</span>
+  </span>
+</a>
+
+<style>
+.thit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition);
+}
+.thit:hover { border-color: var(--border-hover); }
+.thit__crest {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-raised);
+  border-radius: 50%;
+  overflow: hidden;
+}
+.thit__crest :global(.crest) { width: 28px; height: 28px; }
+.thit__crest :global(.crest__abbr) { font-size: 0.7rem; }
+.thit__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.thit__name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.thit__meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

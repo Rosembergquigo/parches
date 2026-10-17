@@ -212,6 +212,14 @@ model Tournament {
   hasPlayoffs     Boolean @default(false)
   qualifyingSpots Int? // cuántos equipos clasifican por grupo
 
+  // Fútbol: dos tiempos de N minutos. extraTimeStages / penaltyStages
+  // son listas de jornadas con prórroga o penales si hay empate
+  // ("*" = todas, "" = fase regular sin nombre).
+  periodMinutes    Int  @default(45)
+  extraTimeMinutes Int  @default(15)
+  extraTimeStages  Json @default("[]")
+  penaltyStages    Json @default("[]")
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -298,6 +306,13 @@ model Match {
   status       MatchStatus @default(SCHEDULED)
   clock        String?
   period       String?
+  // Reloj: elapsed se congela al pausar. Si running, el minuto real es
+  // elapsed + (now - epoch). La ficha cuenta en el cliente; Redis solo
+  // avisa start/pause/next — no un tick por segundo.
+  clockElapsed Int       @default(0)
+  clockRunning Boolean   @default(false)
+  clockEpoch   DateTime?
+  periodIndex  Int       @default(1)
   // Agrupa el partido dentro del fixture/bracket: "Jornada 18",
   // "Cruces" (generado desde standings), "Semifinal", "Final"...
   // Null = fase de grupos / todos-contra-todos sin ronda nombrada.

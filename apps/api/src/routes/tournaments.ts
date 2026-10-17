@@ -5,6 +5,7 @@ import { generateUniqueTournamentSlug, tournamentWhere } from '../lib/slug.js';
 import { requireTournamentEditor, userIdFrom } from '../lib/authz.js';
 import type { TournamentPostCategory } from '@prisma/client';
 import { dateForRound, planFixture } from '../lib/fixture.js';
+import { FOOTBALL_EXTRA_MINUTES, FOOTBALL_PERIOD_MINUTES } from '@parches/utils';
 import { toTitleCase } from '../lib/text.js';
 import { isIndividualSport } from '@parches/config';
 import {
@@ -18,6 +19,7 @@ import {
 } from '../lib/enrollments.js';
 import { notifyCaptainAssigned, kickoffRemindedValue, notifyMatchKickoff } from '../lib/notify.js';
 import { withPlayerPhotos, withTournamentLooks } from '../lib/playerPhoto.js';
+import { formatFromTournament, withDisplayClock } from '../lib/matchClock.js';
 import {
   computeStandings,
   computeCompiledQualifiers,
@@ -157,6 +159,43 @@ function parseTournamentMediaUrl(raw: unknown): string | null | undefined {
   throw Object.assign(new Error('La imagen no es válida'), { statusCode: 400 });
 }
 
+function parsePeriodMinutes(raw: unknown): 20 | 30 | 45 | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!(FOOTBALL_PERIOD_MINUTES as readonly number[]).includes(n)) {
+    throw Object.assign(new Error('Cada tiempo debe durar 20, 30 o 45 minutos'), { statusCode: 400 });
+  }
+  return n as 20 | 30 | 45;
+}
+
+function parseExtraTimeMinutes(raw: unknown): 5 | 10 | 15 | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!(FOOTBALL_EXTRA_MINUTES as readonly number[]).includes(n)) {
+    throw Object.assign(new Error('Cada tiempo extra debe durar 5, 10 o 15 minutos'), { statusCode: 400 });
+  }
+  return n as 5 | 10 | 15;
+}
+
+function parseExtraTimeStages(raw: unknown): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw Object.assign(new Error('Las fases de prórroga no son válidas'), { statusCode: 400 });
+  }
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      throw Object.assign(new Error('Las fases de prórroga no son válidas'), { statusCode: 400 });
+    }
+    const value = item.trim();
+    if (value === '*') {
+      return ['*'];
+    }
+    out.push(value);
+  }
+  return [...new Set(out)];
+}
+
 export const tournamentRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (_req, reply) => {
     const matchInclude = {
@@ -196,7 +235,11 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(await Promise.all(
       tournaments.map(async tournament => withTournamentLooks({
         ...tournament,
-        matches: [...(liveByTournament.get(tournament.id) ?? []), ...tournament.matches],
+        matches: [...(liveByTournament.get(tournament.id) ?? []), ...tournament.matches]
+          .map(match => withDisplayClock(tournament.sport, match, {
+            format: formatFromTournament(tournament),
+            stage: match.stage,
+          })),
       })),
     ));
   });
@@ -220,7 +263,13 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     if (!tournament) return reply.status(404).send({ error: 'Not found' });
-    return reply.send(await withTournamentLooks(tournament));
+    return reply.send(await withTournamentLooks({
+      ...tournament,
+      matches: tournament.matches.map(match => withDisplayClock(tournament.sport, match, {
+        format: formatFromTournament(tournament),
+        stage: match.stage,
+      })),
+    }));
   });
 
   const POST_CATEGORIES = new Set<TournamentPostCategory>(['COMUNICADO', 'NOTICIA', 'ANUNCIO']);
@@ -388,6 +437,10 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       description?: string;
       hasPlayoffs?: boolean;
       qualifyingSpots?: number;
+      periodMinutes?: number;
+      extraTimeMinutes?: number;
+      extraTimeStages?: string[];
+      penaltyStages?: string[];
     };
   }>('/', { onRequest: [app.authenticate] }, async (req, reply) => {
     if (!req.body?.organizationId) {
@@ -398,9 +451,33 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
     if (!(await requireTournamentEditor(req, reply, org.id))) return;
 
     const slug = await generateUniqueTournamentSlug(req.body.name);
-    const { organizationId, ...rest } = req.body;
+    const { organizationId, periodMinutes, extraTimeMinutes, extraTimeStages, penaltyStages, ...rest } = req.body;
+    let format: {
+      periodMinutes?: 20 | 30 | 45;
+      extraTimeMinutes?: 5 | 10 | 15;
+      extraTimeStages?: string[];
+      penaltyStages?: string[];
+    } = {};
+    try {
+      format = {
+        periodMinutes: parsePeriodMinutes(periodMinutes),
+        extraTimeMinutes: parseExtraTimeMinutes(extraTimeMinutes),
+        extraTimeStages: parseExtraTimeStages(extraTimeStages),
+        penaltyStages: parseExtraTimeStages(penaltyStages),
+      };
+    } catch (err) {
+      return sendParseError(reply, err);
+    }
     const tournament = await prisma.tournament.create({
-      data: { ...rest, slug, organizationId },
+      data: {
+        ...rest,
+        slug,
+        organizationId,
+        ...(format.periodMinutes !== undefined ? { periodMinutes: format.periodMinutes } : {}),
+        ...(format.extraTimeMinutes !== undefined ? { extraTimeMinutes: format.extraTimeMinutes } : {}),
+        ...(format.extraTimeStages !== undefined ? { extraTimeStages: format.extraTimeStages } : {}),
+        ...(format.penaltyStages !== undefined ? { penaltyStages: format.penaltyStages } : {}),
+      },
     });
     return reply.status(201).send(tournament);
   });
@@ -419,6 +496,10 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       description: string | null;
       hasPlayoffs: boolean;
       qualifyingSpots: number | null;
+      periodMinutes: number;
+      extraTimeMinutes: number;
+      extraTimeStages: string[];
+      penaltyStages: string[];
     }>;
   }>('/:idOrSlug', { onRequest: [app.authenticate] }, async (req, reply) => {
     const existing = await prisma.tournament.findFirst({ where: tournamentWhere(req.params.idOrSlug) });
@@ -438,6 +519,10 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       description?: string | null;
       hasPlayoffs?: boolean;
       qualifyingSpots?: number | null;
+      periodMinutes?: number;
+      extraTimeMinutes?: number;
+      extraTimeStages?: Prisma.InputJsonValue;
+      penaltyStages?: Prisma.InputJsonValue;
     } = {};
 
     try {
@@ -473,6 +558,14 @@ export const tournamentRoutes: FastifyPluginAsync = async (app) => {
       if (body.qualifyingSpots !== undefined) {
         data.qualifyingSpots = body.qualifyingSpots === null ? null : Number(body.qualifyingSpots);
       }
+      const periodMinutes = parsePeriodMinutes(body.periodMinutes);
+      if (periodMinutes !== undefined) data.periodMinutes = periodMinutes;
+      const extraTimeMinutes = parseExtraTimeMinutes(body.extraTimeMinutes);
+      if (extraTimeMinutes !== undefined) data.extraTimeMinutes = extraTimeMinutes;
+      const extraTimeStages = parseExtraTimeStages(body.extraTimeStages);
+      if (extraTimeStages !== undefined) data.extraTimeStages = extraTimeStages;
+      const penaltyStages = parseExtraTimeStages(body.penaltyStages);
+      if (penaltyStages !== undefined) data.penaltyStages = penaltyStages;
     } catch (err) {
       return sendParseError(reply, err);
     }

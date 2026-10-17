@@ -1,0 +1,129 @@
+---
+/**
+ * Marketplace: GET `?q=` (búsqueda).
+ * Org: `live` — filtra al teclear, sin recargar.
+ */
+interface Props {
+  action?: string;
+  placeholder: string;
+  ariaLabel: string;
+  value?: string;
+  /** Params extra que hay que conservar al buscar o al limpiar (p. ej. estado). */
+  hidden?: Record<string, string | null | undefined>;
+  hash?: string;
+  id?: string;
+  live?: boolean;
+}
+
+const {
+  action = '',
+  placeholder,
+  ariaLabel,
+  value = '',
+  hidden = {},
+  hash = '',
+  id = 'search-q',
+  live = false,
+} = Astro.props;
+
+const hiddenPairs = Object.entries(hidden).filter(
+  (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0,
+);
+const clearParams = new URLSearchParams(hiddenPairs);
+const clearQs = clearParams.toString();
+const clearHref = `${action}${clearQs ? `?${clearQs}` : ''}${hash}`;
+---
+
+<form
+  method="get"
+  action={live ? undefined : `${action}${hash}`}
+  class="find"
+  role="search"
+  aria-label={ariaLabel}
+  data-live={live ? 'true' : undefined}
+>
+  {hiddenPairs.map(([name, val]) => (
+    <input type="hidden" name={name} value={val} />
+  ))}
+  <label class="sr-only" for={id}>{ariaLabel}</label>
+  <span class="find__icon" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3-3" />
+    </svg>
+  </span>
+  <input
+    type="search"
+    id={id}
+    name={live ? undefined : 'q'}
+    class="find__input"
+    value={value}
+    placeholder={placeholder}
+    autocomplete="off"
+    enterkeyhint="search"
+  />
+  {live ? (
+    <button type="button" class="find__clear" hidden={!value} aria-label="Limpiar filtro">Limpiar</button>
+  ) : (
+    value && (
+      <a href={clearHref} class="find__clear" aria-label="Limpiar búsqueda">Limpiar</a>
+    )
+  )}
+  {!live && <button type="submit" class="find__go">Buscar</button>}
+</form>
+
+<style>
+.find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px 4px 4px 14px;
+  transition: border-color var(--transition);
+}
+.find:focus-within { border-color: var(--accent); }
+.find__icon {
+  display: flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.find__input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 8px 4px;
+}
+.find__input::placeholder { color: var(--text-muted); }
+.find__input::-webkit-search-cancel-button { display: none; }
+.find__clear {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 4px 6px;
+}
+.find__clear:hover { color: var(--text-primary); }
+.find__go {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #000;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+}
+.find__go:hover { filter: brightness(1.08); }
+</style>

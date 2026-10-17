@@ -13,13 +13,60 @@ import HeroCarousel from '../components/hero/HeroCarousel.astro';
 import LiveStrip from '../components/match/LiveStrip.astro';
 import SportTabs from '../components/tournament/SportTabs.astro';
 import TournamentRow from '../components/tournament/TournamentRow.astro';
+import MatchCard from '../components/match/MatchCard.astro';
+import SearchBar from '../components/ui/SearchBar.astro';
+import TeamSearchHit from '../components/search/TeamSearchHit.astro';
 
 import VenueCard from '../components/venue/VenueCard.astro';
 import { getTournamentsWithMatches } from '../lib/api';
 import { getFeaturedVenues } from '../data/venues';
-import type { Sport } from '../data/mock';
+import { queryMatches, readSearchQuery, SPORT_SEARCH_LABEL } from '../lib/search';
+import type { MatchSnippet, Sport, TeamSnippet } from '../data/mock';
 
 const tournaments = await getTournamentsWithMatches(Astro.request);
+const q = readSearchQuery(Astro.url);
+const isSearch = q.length > 0;
+
+type MatchHit = MatchSnippet & { sport: Sport; tournamentName: string };
+type TeamHit = TeamSnippet & { sport: Sport; tournamentName: string };
+
+const MATCH_RANK: Record<string, number> = { LIVE: 0, SCHEDULED: 1, FINISHED: 2 };
+
+const matchHits: MatchHit[] = isSearch
+  ? tournaments
+      .flatMap(t => t.matches.map(m => ({ ...m, sport: t.sport, tournamentName: t.name })))
+      .filter(m => queryMatches(
+        q,
+        m.homeTeam.name,
+        m.awayTeam.name,
+        m.homeTeam.shortName,
+        m.awayTeam.shortName,
+        m.tournamentName,
+        m.venue,
+        SPORT_SEARCH_LABEL[m.sport],
+      ))
+      .sort((a, b) => (MATCH_RANK[a.status] ?? 9) - (MATCH_RANK[b.status] ?? 9))
+  : [];
+
+const seenTeams = new Set<string>();
+const teamHits: TeamHit[] = [];
+if (isSearch) {
+  for (const t of tournaments) {
+    const roster = t.teams?.length
+      ? t.teams
+      : t.matches.flatMap(m => [m.homeTeam, m.awayTeam]);
+    for (const team of roster) {
+      if (seenTeams.has(team.id)) continue;
+      seenTeams.add(team.id);
+      if (queryMatches(q, team.name, team.shortName, t.name, SPORT_SEARCH_LABEL[t.sport])) {
+        teamHits.push({ ...team, sport: t.sport, tournamentName: t.name });
+      }
+    }
+  }
+  teamHits.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+const searchEmpty = isSearch && matchHits.length === 0 && teamHits.length === 0;
 
 const liveMatches = tournaments.flatMap(t =>
   t.matches
@@ -48,11 +95,11 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
 
 <Base title={pageTitle} description={pageDesc}>
 
-  {heroMatches.length > 0 && (
+  {!isSearch && heroMatches.length > 0 && (
     <HeroCarousel matches={heroMatches} />
   )}
 
-  {heroMatches.length === 0 && (
+  {!isSearch && heroMatches.length === 0 && (
     <div class="hero-empty">
       <p class="display-md" style="color: var(--text-secondary);">
         No hay partidos en vivo ahora mismo
@@ -64,44 +111,95 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
   )}
 
   <main class="marketplace">
+    <div class="marketplace__search">
+      <SearchBar
+        action="/"
+        placeholder="Buscar partidos o equipos"
+        ariaLabel="Buscar partidos o equipos"
+        value={q}
+        id="market-q"
+      />
+    </div>
 
-    {liveMatches.length > 0 && (
-      <LiveStrip matches={liveMatches} />
-    )}
-
-    <section class="tournaments" aria-label="Torneos activos">
-      <div class="tournaments__header">
-        <h2 class="tournaments__title">Torneos activos</h2>
-        <a href="/tournaments" class="tournaments__explore">Explorar todos →</a>
-      </div>
-
-      <SportTabs sports={activeSports} />
-
-      {tournaments.map(tournament => (
-        <TournamentRow tournament={tournament} />
-      ))}
-
-      {tournaments.length === 0 && (
-        <div class="tournaments__empty">
-          <p>No hay torneos activos en este momento.</p>
-        </div>
-      )}
-    </section>
-
-    {featuredVenues.length > 0 && (
-      <section class="venues-home" aria-label="Canchas y estadios">
+    {isSearch ? (
+      <section class="search-results" aria-label={`Resultados para ${q}`}>
         <div class="tournaments__header">
-          <h2 class="tournaments__title">Canchas y estadios</h2>
-          <a href="/venues" class="tournaments__explore">Ver todas →</a>
+          <h2 class="tournaments__title">
+            {searchEmpty
+              ? `Nada coincide con “${q}”`
+              : [
+                  matchHits.length ? `${matchHits.length} partido${matchHits.length === 1 ? '' : 's'}` : null,
+                  teamHits.length ? `${teamHits.length} ${teamHits.length === 1 ? 'equipo' : 'equipos'}` : null,
+                ].filter(Boolean).join(' · ')}
+          </h2>
         </div>
-        <div class="venues-home__grid">
-          {featuredVenues.map(venue => (
-            <VenueCard venue={venue} />
-          ))}
-        </div>
-      </section>
-    )}
 
+        {searchEmpty && (
+          <p class="tournaments__empty">Prueba con el nombre de un equipo, un partido o un torneo.</p>
+        )}
+
+        {matchHits.length > 0 && (
+          <div class="search-block">
+            <h3 class="search-block__title">Partidos</h3>
+            <div class="search-matches">
+              {matchHits.map(m => (
+                <MatchCard match={m} sport={m.sport} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {teamHits.length > 0 && (
+          <div class="search-block">
+            <h3 class="search-block__title">Equipos</h3>
+            <div class="search-teams">
+              {teamHits.map(t => (
+                <TeamSearchHit team={t} sport={t.sport} tournamentName={t.tournamentName} />
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    ) : (
+      <>
+        {liveMatches.length > 0 && (
+          <LiveStrip matches={liveMatches} />
+        )}
+
+        <section class="tournaments" aria-label="Torneos activos">
+          <div class="tournaments__header">
+            <h2 class="tournaments__title">Torneos activos</h2>
+            <a href="/tournaments" class="tournaments__explore">Explorar todos →</a>
+          </div>
+
+          <SportTabs sports={activeSports} />
+
+          {tournaments.map(tournament => (
+            <TournamentRow tournament={tournament} />
+          ))}
+
+          {tournaments.length === 0 && (
+            <div class="tournaments__empty">
+              <p>No hay torneos activos en este momento.</p>
+            </div>
+          )}
+        </section>
+
+        {featuredVenues.length > 0 && (
+          <section class="venues-home" aria-label="Canchas y estadios">
+            <div class="tournaments__header">
+              <h2 class="tournaments__title">Canchas y estadios</h2>
+              <a href="/venues" class="tournaments__explore">Ver todas →</a>
+            </div>
+            <div class="venues-home__grid">
+              {featuredVenues.map(venue => (
+                <VenueCard venue={venue} />
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    )}
   </main>
 
 </Base>
@@ -120,6 +218,31 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
 .marketplace {
   flex: 1;
   padding-bottom: 60px;
+}
+.marketplace__search {
+  padding: 20px 24px 8px;
+}
+.search-block { margin-top: 8px; }
+.search-block__title {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 24px 10px;
+}
+.search-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 24px 20px;
+}
+.search-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 24px 24px;
+  max-width: 720px;
 }
 .tournaments {
   padding-top: 28px;
@@ -167,5 +290,9 @@ const pageDesc = 'Sigue torneos y partidos en vivo de fútbol, baloncesto, tenis
 @media (max-width: 640px) {
   .venues-home__grid { grid-template-columns: 1fr; padding: 0 16px; }
   .tournaments__header { padding: 0 16px; }
+  .marketplace__search { padding: 16px 16px 4px; }
+  .search-block__title,
+  .search-matches,
+  .search-teams { padding-left: 16px; padding-right: 16px; }
 }
 </style>

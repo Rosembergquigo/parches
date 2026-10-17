@@ -8,9 +8,8 @@
  *   VideoPlayer                      → React island, client:load
  *   EventFeed                        → React island, client:load
  *
- * Los islands reciben el estado inicial del servidor y abren
- * WebSocket solo si status === 'LIVE'. Si está FINISHED muestran
- * datos históricos sin ninguna conexión persistente.
+ * Los islands reciben el estado inicial del servidor. En LIVE
+ * comparten un solo WebSocket (lib/matchLive). FINISHED no conecta.
  *
  * Datos reales desde @parches/api (GET /api/matches/:id). `viewerCount`
  * (streaming-data/Redis) todavía no existe en la API real. `stats`
@@ -24,6 +23,7 @@ import LiveScoreboard  from '../../../components/match/LiveScoreboard';
 import VideoPlayer     from '../../../components/match/VideoPlayer';
 import EventTimeline   from '../../../components/match/EventTimeline';
 import EventFeed       from '../../../components/match/EventFeed';
+import LiveStatusLabel from '../../../components/match/LiveStatusLabel';
 import MatchStatsPanel from '../../../components/match/MatchStatsPanel';
 import SportIcon       from '../../../components/ui/SportIcon.astro';
 import { getMatchDetail } from '../../../lib/api';
@@ -40,9 +40,6 @@ const {
   tournamentSlug, sport, hlsUrl, streamKey,
   viewerCount, events, stats,
 } = match;
-
-const isLive     = status === 'LIVE';
-const isFinished = status === 'FINISHED';
 
 const sportLabel: Record<string, string> = {
   football: 'Fútbol', basketball: 'Baloncesto', tennis: 'Tenis',
@@ -91,6 +88,10 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
         initialAwayScore={awayScore}
         initialClock={clock ?? '−'}
         initialPeriod={period ?? ''}
+        sport={sport}
+        initialClockSeconds={match.clockSeconds}
+        initialClockRunning={match.clockRunning}
+        initialPeriodIndex={match.periodIndex ?? 1}
         status={status}
         wsUrl={wsUrl}
         viewerCount={viewerCount}
@@ -111,6 +112,8 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
           homeTeam={homeTeam.name}
           awayTeam={awayTeam.name}
           streamKey={streamKey}
+          matchId={id!}
+          wsUrl={wsUrl}
         />
       </div>
 
@@ -136,13 +139,12 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
         )}
         <div class="match-info-card__row">
           <span class="match-info-card__label">Estado</span>
-          <span class:list={[
-            'match-info-card__value',
-            isLive     && 'match-info-card__value--live',
-            isFinished && 'match-info-card__value--fin',
-          ]}>
-            {isLive ? '● En vivo' : isFinished ? 'Finalizado' : 'Programado'}
-          </span>
+          <LiveStatusLabel
+            client:load
+            matchId={id!}
+            wsUrl={wsUrl}
+            status={status}
+          />
         </div>
         <div class="match-info-card__row">
           <span class="match-info-card__label">Árbitro</span>
@@ -165,6 +167,9 @@ const pageDesc  = `${homeTeam.name} ${homeScore}-${awayScore} ${awayTeam.name} �
         initialEvents={events}
         status={status}
         wsUrl={wsUrl}
+        timelineMinutes={match.timelineMinutes}
+        periodMarks={match.periodMarks}
+        hasPenalties={match.hasPenalties}
       />
 
       <!-- Tabbed panel (Cronología detalle | Estadísticas) -->

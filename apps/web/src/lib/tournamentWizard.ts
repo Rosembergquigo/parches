@@ -46,6 +46,10 @@ export interface WizardInput {
   doubleRound: boolean;
   venue: string;
   kickoff: string;
+  periodMinutes: number;
+  extraTimeMinutes: number;
+  extraTimeAll: boolean;
+  penaltiesAll: boolean;
 }
 
 function isoDate(offsetDays: number): string {
@@ -82,6 +86,10 @@ export function defaultWizard(brandColor?: string): WizardInput {
     doubleRound: false,
     venue: '',
     kickoff: '15:00',
+    periodMinutes: 45,
+    extraTimeMinutes: 15,
+    extraTimeAll: false,
+    penaltiesAll: false,
   };
 }
 
@@ -132,6 +140,10 @@ export function readWizardForm(form: FormData): WizardInput {
     doubleRound: form.get('doubleRound') === 'on',
     venue: String(form.get('venue') ?? '').trim(),
     kickoff: String(form.get('kickoff') ?? '15:00').trim() || '15:00',
+    periodMinutes: Number(form.get('periodMinutes')) || 45,
+    extraTimeMinutes: Number(form.get('extraTimeMinutes')) || 15,
+    extraTimeAll: form.get('extraTimeAll') === 'on',
+    penaltiesAll: form.get('penaltiesAll') === 'on',
   };
 }
 
@@ -207,6 +219,12 @@ export async function publishWizard(
       qualifyingSpots: data.format === 'groups' && data.hasPlayoffs
         ? data.qualifyingSpots
         : undefined,
+      ...(data.sport === 'football' ? {
+        periodMinutes: data.periodMinutes,
+        extraTimeMinutes: data.extraTimeMinutes,
+        extraTimeStages: data.extraTimeAll ? ['*'] : [],
+        penaltyStages: data.penaltiesAll ? ['*'] : [],
+      } : {}),
     },
     request
   );

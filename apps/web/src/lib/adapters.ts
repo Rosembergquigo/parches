@@ -8,7 +8,14 @@
  * objeto que reciben. Si el día de mañana el shape de la API cambia, el único
  * lugar que hay que tocar es este archivo.
  */
-import { toTitleCase } from '@parches/utils';
+import {
+  footballPeriodMarks,
+  footballTimelineMinutes,
+  parseFootballFormat,
+  stageHasPenalties,
+  toTitleCase,
+  type PeriodMark,
+} from '@parches/utils';
 import { mediaUrl } from './media';
 import type {
   Sport,
@@ -74,6 +81,11 @@ export interface RawMatch {
   status: 'SCHEDULED' | 'LIVE' | 'HALFTIME' | 'FINISHED';
   clock?: string | null;
   period?: string | null;
+  clockElapsed?: number;
+  clockRunning?: boolean;
+  clockEpoch?: string | Date | null;
+  clockSeconds?: number;
+  periodIndex?: number;
   stage?: string | null;
   venue?: string | null;
   streamKey?: string | null;
@@ -101,6 +113,10 @@ export interface RawTournament {
   description?: string | null;
   hasPlayoffs: boolean;
   qualifyingSpots?: number | null;
+  periodMinutes?: number;
+  extraTimeMinutes?: number;
+  extraTimeStages?: string[] | unknown;
+  penaltyStages?: string[] | unknown;
   organizationId?: string;
   organization?: { id: string; slug: string; name: string };
   teams: RawTeam[];
@@ -177,6 +193,8 @@ export interface RawMatchEvent {
   clock: string;
   teamId?: string | null;
   playerId?: string | null;
+  playerName?: string | null;
+  assistPlayerName?: string | null;
   description?: string | null;
   createdAt: string;
 }
@@ -277,17 +295,13 @@ function toEventType(type: string): EventType {
   return (KNOWN_EVENT_TYPES.has(type) ? type : 'custom') as EventType;
 }
 
-/**
- * MatchEvent.playerId referencia un PlayerProfile — todavía no resolvemos
- * el nombre del jugador aquí (requeriría otro include/join). Por ahora el
- * feed muestra el evento sin nombre de jugador cuando falta ese dato.
- */
 export function toMatchEvent(event: RawMatchEvent): MockMatchEvent {
   return {
     id: event.id,
     type: toEventType(event.type),
     clock: event.clock,
     teamId: event.teamId ?? undefined,
+    playerName: event.playerName ?? undefined,
     description: event.description ?? undefined,
     timestamp: event.createdAt,
   };
@@ -330,9 +344,12 @@ export function mapTournamentListItem(raw: RawTournament): TournamentWithMatches
     sport: raw.sport as Sport,
     status: raw.status,
     stage: stages.size === 1 ? [...stages][0]! : undefined,
-    teamCount: raw.teams.length,
+    teamCount: (raw.teams ?? []).length,
     logoUrl: raw.logoUrl ? mediaUrl(raw.logoUrl) : undefined,
+    backgroundImageUrl: raw.backgroundImageUrl ? mediaUrl(raw.backgroundImageUrl) : undefined,
+    brandColor: raw.brandColor ?? undefined,
     matches: raw.matches.map(toMatchSnippet),
+    teams: (raw.teams ?? []).map(toTeamSnippet),
   };
 }
 
@@ -493,6 +510,12 @@ export function mapMatchDetail(raw: RawMatchDetail): MatchDetail {
     status: toMatchStatus(raw.status),
     clock: raw.clock ?? undefined,
     period: raw.period ?? undefined,
+    clockSeconds: raw.clockSeconds,
+    clockRunning: raw.clockRunning,
+    clockEpoch: raw.clockEpoch
+      ? (typeof raw.clockEpoch === 'string' ? raw.clockEpoch : raw.clockEpoch.toISOString())
+      : raw.clockEpoch,
+    periodIndex: raw.periodIndex,
     venue: raw.venue ?? undefined,
     referee: raw.referee ? { id: raw.referee.id, name: raw.referee.name } : undefined,
     scheduledAt: raw.scheduledAt ?? undefined,
@@ -501,6 +524,22 @@ export function mapMatchDetail(raw: RawMatchDetail): MatchDetail {
     viewerCount: undefined,
     events: raw.events.map(toMatchEvent),
     stats: raw.stats ?? undefined,
+    stage: raw.stage ?? undefined,
+    ...timelineFromTournament(raw.tournament, raw.stage),
+  };
+}
+
+function timelineFromTournament(tournament: RawTournament, stage?: string | null): {
+  timelineMinutes?: number;
+  periodMarks?: PeriodMark[];
+  hasPenalties?: boolean;
+} {
+  if (tournament.sport !== 'football') return {};
+  const format = parseFootballFormat(tournament);
+  return {
+    timelineMinutes: footballTimelineMinutes(format, stage),
+    periodMarks: footballPeriodMarks(format, stage),
+    hasPenalties: stageHasPenalties(format, stage),
   };
 }
 
@@ -520,6 +559,15 @@ export function mapUserProfile(raw: RawUser): UserProfile {
   };
 }
 
+function toStatRecord(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  }
+  return out;
+}
+
 function toPlayerEnrollment(e: RawPlayerEnrollment): PlayerEnrollment {
   return {
     id: e.id,
@@ -533,7 +581,7 @@ function toPlayerEnrollment(e: RawPlayerEnrollment): PlayerEnrollment {
     jerseyNumber: e.jerseyNumber ?? undefined,
     position: e.position ?? undefined,
     isActive: e.isActive,
-    tournamentStats: e.tournamentStats?.stats,
+    tournamentStats: toStatRecord(e.tournamentStats?.stats),
     matchesPlayed: e.tournamentStats?.matchesPlayed ?? 0,
   };
 }
