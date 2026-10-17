@@ -5,14 +5,12 @@
  * Recibe los eventos históricos del servidor como prop inicial.
  * Si el partido está LIVE, el WS agrega nuevos eventos al top de la lista.
  *
- * Comparte el WS lógicamente con LiveScoreboard pero son dos instancias
- * independientes — en una versión futura se podría centralizar el WS
- * en un Context o Zustand store. Por ahora la duplicación es aceptable
- * porque las conexiones son ligeras y Fastify las gestiona eficientemente.
+ * El socket lo comparte matchLive con LiveScoreboard y EventTimeline.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { EVENT_CONFIG, type MatchEventItem } from '../../lib/matchEvents';
+import { statusFromLiveMessage, useMatchLive } from '../../lib/matchLive';
 
 interface Team {
   id: string;
@@ -33,30 +31,21 @@ export default function EventFeed({
   matchId, homeTeam, awayTeam,
   initialEvents, status, wsUrl,
 }: Props) {
-  // Newest first
-  const [events, setEvents] = useState<MatchEventItem[]>(
-    [...initialEvents].reverse()
-  );
-  const wsRef = useRef<WebSocket | null>(null);
+  // GET trae newest first; el WS prepende el mismo orden
+  const [events, setEvents] = useState<MatchEventItem[]>(initialEvents);
+  const [liveStatus, setLiveStatus] = useState(status);
 
-  useEffect(() => {
-    if (status !== 'LIVE') return;
-
-    const ws = new WebSocket(`${wsUrl}/matches/${matchId}`);
-    wsRef.current = ws;
-
-    ws.onmessage = (e: MessageEvent) => {
-      try {
-        const msg = JSON.parse(e.data as string);
-        if (msg.matchId !== matchId) return;
-        if (msg.type === 'event' && msg.data) {
-          setEvents(prev => [msg.data as MatchEventItem, ...prev]);
-        }
-      } catch { /* ignore */ }
-    };
-
-    return () => ws.close();
-  }, [matchId, status, wsUrl]);
+  useMatchLive(matchId, wsUrl, liveStatus === 'LIVE', msg => {
+    if (msg.matchId !== matchId) return;
+    const nextStatus = statusFromLiveMessage(msg);
+    if (nextStatus) setLiveStatus(nextStatus);
+    if (msg.type !== 'event' || !msg.data) return;
+    const incoming = msg.data as MatchEventItem;
+    if (!incoming.id) return;
+    setEvents(prev => prev.some(ev => ev.id === incoming.id)
+      ? prev
+      : [incoming, ...prev]);
+  });
 
   function getTeamName(teamId?: string): string {
     if (!teamId) return '';
@@ -72,7 +61,7 @@ export default function EventFeed({
     <div className="ef">
       <div className="ef__header">
         <span className="ef__title">Eventos del partido</span>
-        {status === 'LIVE' && (
+        {liveStatus === 'LIVE' && (
           <span className="ef__live-badge">
             <span className="ef__live-dot" aria-hidden="true" />
             En vivo
@@ -82,7 +71,7 @@ export default function EventFeed({
 
       {events.length === 0 && (
         <div className="ef__empty">
-          {status === 'SCHEDULED'
+          {liveStatus === 'SCHEDULED'
             ? 'El partido aún no ha comenzado'
             : 'Sin eventos registrados'}
         </div>
@@ -92,7 +81,7 @@ export default function EventFeed({
         {events.map(ev => {
           const cfg  = EVENT_CONFIG[ev.type] ?? EVENT_CONFIG.custom!;
           const team = getTeamName(ev.teamId);
-          const isGoal = ev.type === 'goal';
+          const isGoal = ev.type === 'goal' || ev.type === 'score_update';
 
           return (
             <li

@@ -45,7 +45,11 @@ export interface TournamentWithMatches {
   stage?: string;          // "Jornada 18" / "Semifinales" / "Cuartos de final"
   teamCount?: number;
   logoUrl?: string;
+  backgroundImageUrl?: string;
+  brandColor?: string;
   matches: MatchSnippet[];
+  /** Plantilla del torneo (para buscar equipos aunque no tengan partido en el strip). */
+  teams?: TeamSnippet[];
 }
 
 // ── Mock data ────────────────────────────────────────────────
@@ -562,6 +566,10 @@ export interface MatchDetail {
   status: MatchStatus;
   clock?: string;
   period?: string;
+  clockSeconds?: number;
+  clockRunning?: boolean;
+  clockEpoch?: string | null;
+  periodIndex?: number;
   venue?: string;
   referee?: { id: string; name: string };
   scheduledAt?: string;
@@ -570,6 +578,11 @@ export interface MatchDetail {
   viewerCount?: number;
   events: MatchEvent[];
   stats?: MatchStatRow[];   // se agrega después del type MatchStatRow
+  /** Minutos totales de la barra (fútbol). 0 = no hay eje fijo. */
+  timelineMinutes?: number;
+  periodMarks?: { at: number; label: string }[];
+  hasPenalties?: boolean;
+  stage?: string;
 }
 
 export const MOCK_MATCH_DETAIL: MatchDetail = {

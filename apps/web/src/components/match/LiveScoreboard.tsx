@@ -1,15 +1,17 @@
 /**
  * LiveScoreboard.tsx — React island para el marcador en vivo.
  *
- * Se hidrata en el cliente. Si el partido está LIVE, abre un WebSocket
- * a streaming-data y actualiza el score/clock sin re-render del servidor.
+ * Se hidrata en el cliente. Si el partido está LIVE, se suscribe al
+ * WebSocket compartido (matchLive) y actualiza score/clock sin SSR.
  * Si está FINISHED, muestra el score final estático.
  *
  * Props vienen del servidor (Astro) con el estado inicial del partido.
  * El WS solo actualiza la UI — el estado inicial siempre viene SSR.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { formatMatchClock, isFootballPenalties, periodLabelEs } from '@parches/utils';
+import { statusFromLiveMessage, useMatchLive } from '../../lib/matchLive';
 
 interface Team {
   id: string;
@@ -26,6 +28,10 @@ interface Props {
   initialAwayScore: number;
   initialClock: string;
   initialPeriod: string;
+  sport?: string;
+  initialClockSeconds?: number;
+  initialClockRunning?: boolean;
+  initialPeriodIndex?: number;
   status: 'LIVE' | 'SCHEDULED' | 'FINISHED';
   wsUrl: string;             // URL del WebSocket de streaming-data
   viewerCount?: number;
@@ -39,6 +45,9 @@ type WSMessage = {
     awayScore?: number;
     clock?: string;
     period?: string;
+    clockSeconds?: number;
+    clockRunning?: boolean;
+    periodIndex?: number;
     viewerCount?: number;
   };
 };
@@ -51,44 +60,63 @@ export default function LiveScoreboard({
   initialAwayScore,
   initialClock,
   initialPeriod,
+  sport = '',
+  initialClockSeconds,
+  initialClockRunning = false,
+  initialPeriodIndex = 1,
   status,
   wsUrl,
   viewerCount: initialViewers,
 }: Props) {
   const [homeScore,  setHomeScore]  = useState(initialHomeScore);
   const [awayScore,  setAwayScore]  = useState(initialAwayScore);
+  const [clockSeconds, setClockSeconds] = useState(initialClockSeconds ?? 0);
+  const [clockRunning, setClockRunning] = useState(initialClockRunning);
+  const [periodIndex, setPeriodIndex] = useState(initialPeriodIndex);
   const [clock,      setClock]      = useState(initialClock);
   const [period,     setPeriod]     = useState(initialPeriod);
   const [viewers,    setViewers]    = useState(initialViewers ?? 0);
-  const [connected,  setConnected]  = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [liveStatus, setLiveStatus] = useState(status);
+
+  const inPenalties = sport === 'football' && isFootballPenalties(periodIndex);
+  const tickSport = (sport === 'football' || sport === 'basketball') && !inPenalties;
+  const displayClock = inPenalties
+    ? 'PEN'
+    : tickSport
+      ? formatMatchClock(sport, clockSeconds)
+      : clock;
+  const displayPeriod = inPenalties
+    ? 'Penales'
+    : tickSport
+      ? periodLabelEs(sport, periodIndex)
+      : period;
+
+  const connected = useMatchLive(matchId, wsUrl, liveStatus === 'LIVE', msg => {
+    if (msg.matchId !== matchId) return;
+    const nextStatus = statusFromLiveMessage(msg);
+    if (nextStatus) {
+      setLiveStatus(nextStatus);
+      if (nextStatus !== 'LIVE') setClockRunning(false);
+    }
+    if (msg.type !== 'score_update' || !msg.data || typeof msg.data !== 'object') return;
+    const data = msg.data as WSMessage['data'];
+    if (data.homeScore  !== undefined) setHomeScore(data.homeScore);
+    if (data.awayScore  !== undefined) setAwayScore(data.awayScore);
+    if (data.clockSeconds !== undefined) setClockSeconds(data.clockSeconds);
+    if (data.clockRunning !== undefined) setClockRunning(data.clockRunning);
+    if (data.periodIndex !== undefined) setPeriodIndex(data.periodIndex);
+    if (data.clock      !== undefined) setClock(data.clock);
+    if (data.period     !== undefined) setPeriod(data.period);
+    if (data.viewerCount !== undefined) setViewers(data.viewerCount);
+  });
 
   useEffect(() => {
-    if (status !== 'LIVE') return;
-
-    const ws = new WebSocket(`${wsUrl}/matches/${matchId}`);
-    wsRef.current = ws;
-
-    ws.onopen  = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
-
-    ws.onmessage = (e: MessageEvent) => {
-      try {
-        const msg: WSMessage = JSON.parse(e.data as string);
-        if (msg.matchId !== matchId) return;
-        if (msg.type === 'score_update') {
-          if (msg.data.homeScore  !== undefined) setHomeScore(msg.data.homeScore);
-          if (msg.data.awayScore  !== undefined) setAwayScore(msg.data.awayScore);
-          if (msg.data.clock      !== undefined) setClock(msg.data.clock);
-          if (msg.data.period     !== undefined) setPeriod(msg.data.period);
-          if (msg.data.viewerCount !== undefined) setViewers(msg.data.viewerCount);
-        }
-      } catch { /* ignore malformed messages */ }
-    };
-
-    return () => ws.close();
-  }, [matchId, status, wsUrl]);
+    if (liveStatus !== 'LIVE' || !clockRunning || !tickSport) return;
+    const id = window.setInterval(() => {
+      setClockSeconds(prev => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [liveStatus, clockRunning, tickSport]);
 
   const homeWins = homeScore > awayScore;
   const awayWins = awayScore > homeScore;
@@ -101,23 +129,23 @@ export default function LiveScoreboard({
     <div className="sb">
       {/* Status bar */}
       <div className="sb__status-bar">
-        {status === 'LIVE' && (
+        {liveStatus === 'LIVE' && (
           <>
             <span className="sb__live-pill">
               <span className="sb__live-dot" aria-hidden="true" />
               En vivo
             </span>
-            <span className="sb__clock">{clock}</span>
-            <span className="sb__period">{period}</span>
+            <span className="sb__clock">{displayClock}</span>
+            <span className="sb__period">{displayPeriod}</span>
             <span className="sb__ws-status" title={connected ? 'Conectado' : 'Reconectando…'}>
               {connected ? '🟢' : '🔴'}
             </span>
           </>
         )}
-        {status === 'FINISHED' && (
+        {liveStatus === 'FINISHED' && (
           <span className="sb__finished">Partido finalizado · FT</span>
         )}
-        {status === 'SCHEDULED' && (
+        {liveStatus === 'SCHEDULED' && (
           <span className="sb__soon">Próximamente</span>
         )}
       </div>
@@ -145,7 +173,7 @@ export default function LiveScoreboard({
               {awayScore}
             </span>
           </div>
-          {viewers > 0 && status === 'LIVE' && (
+          {viewers > 0 && liveStatus === 'LIVE' && (
             <div className="sb__viewers">● {formatViewers(viewers)} viendo</div>
           )}
         </div>

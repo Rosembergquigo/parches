@@ -8,17 +8,22 @@
  *
  * Vive siempre visible debajo del video (no es parte de las pestañas)
  * para dar una vista rápida del partido sin ocupar el ancho del stream.
- * Comparte el mismo WS que EventFeed para actualizarse en vivo — ver
- * nota de duplicación de conexión en EventFeed.tsx.
+ * El socket lo comparte matchLive con LiveScoreboard y EventFeed.
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { EVENT_CONFIG, parseClockMinutes, type MatchEventItem } from '../../lib/matchEvents';
+import { statusFromLiveMessage, useMatchLive } from '../../lib/matchLive';
 
 interface Team {
   id: string;
   name: string;
   shortName: string;
+}
+
+interface PeriodMark {
+  at: number;
+  label: string;
 }
 
 interface Props {
@@ -28,44 +33,43 @@ interface Props {
   initialEvents: MatchEventItem[];
   status: 'LIVE' | 'SCHEDULED' | 'FINISHED';
   wsUrl: string;
+  timelineMinutes?: number;
+  periodMarks?: PeriodMark[];
+  hasPenalties?: boolean;
 }
 
 export default function EventTimeline({
   matchId, homeTeam, awayTeam,
   initialEvents, status, wsUrl,
+  timelineMinutes = 0,
+  periodMarks = [],
+  hasPenalties = false,
 }: Props) {
   const [events, setEvents] = useState<MatchEventItem[]>(initialEvents);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [liveStatus, setLiveStatus] = useState(status);
 
-  useEffect(() => {
-    if (status !== 'LIVE') return;
-
-    const ws = new WebSocket(`${wsUrl}/matches/${matchId}`);
-    wsRef.current = ws;
-
-    ws.onmessage = (e: MessageEvent) => {
-      try {
-        const msg = JSON.parse(e.data as string);
-        if (msg.matchId !== matchId) return;
-        if (msg.type === 'event' && msg.data) {
-          setEvents(prev => [...prev, msg.data as MatchEventItem]);
-        }
-      } catch { /* ignore */ }
-    };
-
-    return () => ws.close();
-  }, [matchId, status, wsUrl]);
+  useMatchLive(matchId, wsUrl, liveStatus === 'LIVE', msg => {
+    if (msg.matchId !== matchId) return;
+    const nextStatus = statusFromLiveMessage(msg);
+    if (nextStatus) setLiveStatus(nextStatus);
+    if (msg.type !== 'event' || !msg.data) return;
+    const incoming = msg.data as MatchEventItem;
+    if (!incoming.id) return;
+    setEvents(prev => prev.some(ev => ev.id === incoming.id)
+      ? prev
+      : [...prev, incoming]);
+  });
 
   const sorted = useMemo(
     () => [...events].sort((a, b) => parseClockMinutes(a.clock) - parseClockMinutes(b.clock)),
     [events]
   );
 
-  // Dominio de la línea = el evento más tardío (con un mínimo de 1 para evitar división por 0)
+  // Eje = duración del partido (fútbol). Si no hay, cae al último evento.
   const domainMax = useMemo(() => {
-    const max = sorted.reduce((acc, ev) => Math.max(acc, parseClockMinutes(ev.clock)), 0);
-    return Math.max(max, 1);
-  }, [sorted]);
+    const latest = sorted.reduce((acc, ev) => Math.max(acc, parseClockMinutes(ev.clock)), 0);
+    return Math.max(timelineMinutes, latest, 1);
+  }, [sorted, timelineMinutes]);
 
   function pct(clock: string): number {
     return Math.min(100, Math.max(0, (parseClockMinutes(clock) / domainMax) * 100));
@@ -84,19 +88,39 @@ export default function EventTimeline({
     <div className="et">
       <div className="et__header">
         <span className="et__team et__team--home">{homeTeam.shortName}</span>
-        <span className="et__title">Línea de tiempo</span>
+        <span className="et__title">
+          Línea de tiempo{timelineMinutes > 0 ? ` · ${timelineMinutes} min` : ''}{hasPenalties ? ' + penales' : ''}
+        </span>
         <span className="et__team et__team--away">{awayTeam.shortName}</span>
       </div>
 
-      {isEmpty ? (
+      {isEmpty && timelineMinutes <= 0 ? (
         <div className="et__empty">
-          {status === 'SCHEDULED'
+          {liveStatus === 'SCHEDULED'
             ? 'El partido aún no ha comenzado'
             : 'Sin eventos registrados'}
         </div>
       ) : (
         <div className="et__track" role="list" aria-label="Línea de tiempo de eventos">
           <div className="et__line" aria-hidden="true" />
+          {periodMarks.map((mark, i) => {
+            if (i === periodMarks.length - 1) return null;
+            const left = Math.min(100, Math.max(0, (mark.at / domainMax) * 100));
+            return (
+              <div
+                key={`${mark.label}-${mark.at}`}
+                className="et__tick"
+                style={{ left: `${left}%` }}
+                aria-hidden="true"
+              >
+                <span className="et__tick-line" />
+                <span className="et__tick-label">{mark.at}'</span>
+              </div>
+            );
+          })}
+          {hasPenalties && (
+            <div className="et__pen" aria-hidden="true">PEN</div>
+          )}
           {sorted.map(ev => {
             const cfg = EVENT_CONFIG[ev.type] ?? EVENT_CONFIG.custom!;
             const pos = side(ev.teamId);
@@ -125,6 +149,13 @@ export default function EventTimeline({
               </div>
             );
           })}
+          {isEmpty && (
+            <div className="et__empty et__empty--overlay">
+              {liveStatus === 'SCHEDULED'
+                ? 'El partido aún no ha comenzado'
+                : 'Sin eventos registrados'}
+            </div>
+          )}
         </div>
       )}
 
@@ -165,6 +196,49 @@ export default function EventTimeline({
           letter-spacing: 0.06em;
           color: #454a52;
           text-align: center;
+        }
+        .et__empty--overlay {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 8px;
+          padding: 0;
+          pointer-events: none;
+        }
+        .et__tick {
+          position: absolute;
+          top: 18px;
+          bottom: 18px;
+          transform: translateX(-50%);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-end;
+          pointer-events: none;
+          z-index: 1;
+        }
+        .et__tick-line {
+          width: 1px;
+          flex: 1;
+          background: rgba(255,255,255,0.14);
+        }
+        .et__tick-label {
+          margin-top: 4px;
+          font-family: 'Barlow Condensed', sans-serif;
+          font-size: 0.58rem;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          color: #454a52;
+        }
+        .et__pen {
+          position: absolute;
+          right: 0;
+          top: 18px;
+          font-family: 'Barlow Condensed', sans-serif;
+          font-size: 0.58rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          color: #8a9099;
         }
 
         .et__track {

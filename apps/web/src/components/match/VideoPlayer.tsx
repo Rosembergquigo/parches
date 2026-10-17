@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { statusFromLiveMessage, useMatchLive } from '../../lib/matchLive';
 
 interface Props {
   hlsUrl?: string;
@@ -20,6 +21,8 @@ interface Props {
   homeTeam: string;
   awayTeam: string;
   streamKey?: string;
+  matchId?: string;
+  wsUrl?: string;
 }
 
 declare global {
@@ -27,7 +30,7 @@ declare global {
 }
 
 export default function VideoPlayer({
-  hlsUrl, matchStatus, homeTeam, awayTeam, streamKey,
+  hlsUrl, matchStatus, homeTeam, awayTeam, streamKey, matchId, wsUrl,
 }: Props) {
   const videoRef  = useRef<HTMLVideoElement>(null);
   const hlsRef    = useRef<any>(null);
@@ -35,6 +38,18 @@ export default function VideoPlayer({
   const [error,   setError]   = useState<string | null>(null);
   const [muted,   setMuted]   = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [liveStatus, setLiveStatus] = useState(matchStatus);
+
+  useMatchLive(
+    matchId ?? '',
+    wsUrl ?? '',
+    Boolean(matchId && wsUrl && liveStatus === 'LIVE'),
+    msg => {
+      if (matchId && msg.matchId !== matchId) return;
+      const nextStatus = statusFromLiveMessage(msg);
+      if (nextStatus) setLiveStatus(nextStatus);
+    },
+  );
 
   useEffect(() => {
     if (!hlsUrl || !videoRef.current) return;
@@ -96,12 +111,12 @@ export default function VideoPlayer({
     }
   }
 
-  // ── No stream available ─────────────────────────────────
-  if (!hlsUrl) {
+  // ── No stream available / partido ya no está en vivo ────
+  if (!hlsUrl || liveStatus !== 'LIVE') {
     return (
       <div className="vp vp--placeholder">
         <div className="vp__placeholder-inner">
-          {matchStatus === 'LIVE' && (
+          {liveStatus === 'LIVE' && (
             <>
               <div className="vp__placeholder-icon">📡</div>
               <p className="vp__placeholder-title">Stream no disponible</p>
@@ -112,14 +127,14 @@ export default function VideoPlayer({
               </p>
             </>
           )}
-          {matchStatus === 'SCHEDULED' && (
+          {liveStatus === 'SCHEDULED' && (
             <>
               <div className="vp__placeholder-icon">🕐</div>
               <p className="vp__placeholder-title">{homeTeam} vs {awayTeam}</p>
               <p className="vp__placeholder-sub">El stream comenzará cuando inicie el partido</p>
             </>
           )}
-          {matchStatus === 'FINISHED' && (
+          {liveStatus === 'FINISHED' && (
             <>
               <div className="vp__placeholder-icon">🎬</div>
               <p className="vp__placeholder-title">Partido finalizado</p>
@@ -165,7 +180,7 @@ export default function VideoPlayer({
         </button>
 
         <div className="vp__ctrl-center">
-          {matchStatus === 'LIVE' && (
+          {liveStatus === 'LIVE' && (
             <span className="vp__live-badge">
               <span className="vp__live-dot" aria-hidden="true" />
               EN VIVO

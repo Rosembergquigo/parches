@@ -1,11 +1,17 @@
 ---
 /**
- * Operar partidos de un torneo: jornada, fecha, sede, árbitro y estado.
- * El marcador es solo lectura. Se usa dentro del dash-body.
+ * Operar partidos: jornada, sede, árbitro, estado.
+ * En LIVE: fútbol gol+tarjetas, basket 1/2/3, vóley +1.
  */
 import type { RawMatch, RawTournament } from '../../lib/adapters';
 import type { RefereeOption } from '../../lib/api';
-import { toTitleCase } from '@parches/utils';
+import {
+  footballNextStep,
+  isFootballPenalties,
+  maxPeriodIndex,
+  parseFootballFormat,
+  toTitleCase,
+} from '@parches/utils';
 import VenueSelect from '../venue/VenueSelect.astro';
 import RefereeSelect from './RefereeSelect.astro';
 
@@ -43,6 +49,37 @@ for (const m of matches) {
 }
 
 const teams = [...(tournament.teams ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+const canLogGoals = tournament.sport === 'football';
+const canLogBasket = tournament.sport === 'basketball';
+const canLogVolley = tournament.sport === 'volleyball';
+const canTickClock = canLogGoals || canLogBasket;
+const footballFormat = canLogGoals ? parseFootballFormat(tournament) : null;
+const inPlay = (status: string) => status === 'LIVE' || status === 'HALFTIME';
+
+function nextPeriodAction(m: RawMatch): { label: string; disabled: boolean; hint?: string } {
+  const index = Math.max(1, m.periodIndex ?? 1);
+  if (canLogGoals && footballFormat) {
+    const step = footballNextStep({
+      format: footballFormat,
+      stage: m.stage,
+      periodIndex: index,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+    });
+    if (step.kind === 'done') {
+      return { label: step.label, disabled: true, hint: step.label === 'Hay ganador' ? 'Finaliza el partido' : 'Finaliza el partido' };
+    }
+    if (step.kind === 'penalties') {
+      return { label: 'Ir a penales', disabled: false, hint: 'Empate: se definen desde el punto penal' };
+    }
+    return { label: `Siguiente: ${step.label}`, disabled: false };
+  }
+  const sport = canLogBasket ? 'basketball' : canLogVolley ? 'volleyball' : tournament.sport;
+  const max = maxPeriodIndex(sport);
+  const fallback = canLogBasket ? 'Siguiente cuarto' : canLogVolley ? 'Siguiente set' : 'Siguiente tiempo';
+  if (index >= max) return { label: fallback, disabled: true };
+  return { label: fallback, disabled: false };
+}
 ---
 
 <div class="ops">
@@ -67,7 +104,8 @@ const teams = [...(tournament.teams ?? [])].sort((a, b) => a.name.localeCompare(
       <div class="ops-table">
         {list.map(m => (
           <div class="ops-block" id={`m-${m.id}`}>
-            <form method="POST" class="ops-row">
+            <div class="ops-row">
+            <form method="POST">
               <input type="hidden" name="intent" value="update" />
               <input type="hidden" name="matchId" value={m.id} />
 
@@ -139,6 +177,220 @@ const teams = [...(tournament.teams ?? [])].sort((a, b) => a.name.localeCompare(
                 </button>
               </div>
             </form>
+              {inPlay(m.status) && (canTickClock || canLogVolley) && (
+                <div class="ops-goals" role="group" aria-label="Reloj del partido">
+                  <div class="ops-goal">
+                    <span class="ops-clock-read">{m.clock ?? '—'}{m.period ? ` · ${m.period}` : ''}</span>
+                    <span class="ops-clock-state">{
+                      isFootballPenalties(m.periodIndex ?? 1)
+                        ? 'Penales'
+                        : m.clockRunning ? 'En marcha' : 'Pausado'
+                    }</span>
+                    {canTickClock && !isFootballPenalties(m.periodIndex ?? 1) && (
+                      <>
+                        <form method="POST" class="ops-goal">
+                          <input type="hidden" name="intent" value="clock" />
+                          <input type="hidden" name="matchId" value={m.id} />
+                          <input type="hidden" name="action" value="start" />
+                          <button type="submit" class="btn-accent ops-goal__go" disabled={m.clockRunning}>Iniciar</button>
+                        </form>
+                        <form method="POST" class="ops-goal">
+                          <input type="hidden" name="intent" value="clock" />
+                          <input type="hidden" name="matchId" value={m.id} />
+                          <input type="hidden" name="action" value="pause" />
+                          <button type="submit" class="btn-ghost ops-pts" disabled={!m.clockRunning}>Pausar</button>
+                        </form>
+                      </>
+                    )}
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="clock" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="action" value="next" />
+                      <button type="submit" class="btn-ghost ops-pts" disabled={nextPeriodAction(m).disabled}>
+                        {nextPeriodAction(m).label}
+                      </button>
+                    </form>
+                    {nextPeriodAction(m).hint && (
+                      <span class="ops-clock-state">{nextPeriodAction(m).hint}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {inPlay(m.status) && canLogGoals && (
+                <div class="ops-goals" role="group" aria-label="Registrar gol">
+                  {[m.homeTeam, m.awayTeam].map(team => (
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="goal" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <span class="ops-goal__team">{team.shortName}</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># anotador {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="scorerJersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# anotador"
+                        />
+                      </label>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># asistencia {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="assistJersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# asistencia"
+                        />
+                      </label>
+                      <span class="ops-goal__or">o</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># gol en contra {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="ownGoalJersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# en contra"
+                        />
+                      </label>
+                      <button type="submit" class="btn-accent ops-goal__go">Gol</button>
+                    </form>
+                  ))}
+                  {[m.homeTeam, m.awayTeam].map(team => (
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="card" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <span class="ops-goal__team">{team.shortName}</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># tarjeta {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="jersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# dorsal"
+                        />
+                      </label>
+                      <button type="submit" name="cardType" value="yellow_card" class="btn-ghost ops-card__y">
+                        Amarilla
+                      </button>
+                      <button type="submit" name="cardType" value="red_card" class="btn-ghost ops-card__r">
+                        Roja
+                      </button>
+                    </form>
+                  ))}
+                  {[m.homeTeam, m.awayTeam].map(team => (
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="note" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <span class="ops-goal__team">{team.shortName}</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># novedad {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="jersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# dorsal"
+                        />
+                      </label>
+                      <button type="submit" name="eventType" value="foul" class="btn-ghost ops-pts">
+                        Falta
+                      </button>
+                      <button type="submit" name="eventType" value="substitution" class="btn-ghost ops-pts">
+                        Cambio
+                      </button>
+                    </form>
+                  ))}
+                  <form method="POST" class="ops-goal">
+                    <input type="hidden" name="intent" value="custom" />
+                    <input type="hidden" name="matchId" value={m.id} />
+                    <select name="teamId" class="ops-input ops-goal__team-sel">
+                      <option value="">Equipo</option>
+                      <option value={m.homeTeam.id}>{m.homeTeam.shortName}</option>
+                      <option value={m.awayTeam.id}>{m.awayTeam.shortName}</option>
+                    </select>
+                    <label class="ops-goal__field ops-goal__field--grow">
+                      <span class="sr-only">Novedad</span>
+                      <input
+                        type="text"
+                        name="description"
+                        class="ops-input"
+                        maxlength="120"
+                        placeholder="Novedad"
+                      />
+                    </label>
+                    <button type="submit" class="btn-ghost ops-pts">Ok</button>
+                  </form>
+                </div>
+              )}
+              {inPlay(m.status) && canLogBasket && (
+                <div class="ops-goals" role="group" aria-label="Registrar puntos">
+                  {[m.homeTeam, m.awayTeam].map(team => (
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="points" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <span class="ops-goal__team">{team.shortName}</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># anotador {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="jersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# dorsal"
+                        />
+                      </label>
+                      <button type="submit" name="points" value="1" class="btn-ghost ops-pts">+1</button>
+                      <button type="submit" name="points" value="2" class="btn-accent ops-pts">+2</button>
+                      <button type="submit" name="points" value="3" class="btn-ghost ops-pts">+3</button>
+                    </form>
+                  ))}
+                </div>
+              )}
+              {inPlay(m.status) && canLogVolley && (
+                <div class="ops-goals" role="group" aria-label="Registrar punto">
+                  {[m.homeTeam, m.awayTeam].map(team => (
+                    <form method="POST" class="ops-goal">
+                      <input type="hidden" name="intent" value="points" />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <span class="ops-goal__team">{team.shortName}</span>
+                      <label class="ops-goal__field">
+                        <span class="sr-only"># anotador {team.shortName}</span>
+                        <input
+                          type="number"
+                          name="jersey"
+                          class="ops-input ops-goal__num"
+                          min="0"
+                          max="99"
+                          inputmode="numeric"
+                          placeholder="# dorsal"
+                        />
+                      </label>
+                      <button type="submit" name="points" value="1" class="btn-accent ops-goal__go">Punto</button>
+                    </form>
+                  ))}
+                </div>
+              )}
+            </div>
             <form id={`del-${m.id}`} method="POST" hidden>
               <input type="hidden" name="intent" value="delete" />
               <input type="hidden" name="matchId" value={m.id} />
@@ -301,6 +553,80 @@ const teams = [...(tournament.teams ?? [])].sort((a, b) => a.name.localeCompare(
   width: 100%;
 }
 .ops-input:focus { border-color: var(--accent); }
+.ops-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.ops-goal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ops-clock-read {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  flex: 1;
+  min-width: 7rem;
+}
+.ops-clock-state {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.ops-goal__team {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  width: 2.6rem;
+  flex-shrink: 0;
+}
+.ops-goal__field { min-width: 0; }
+.ops-goal__num {
+  width: 6.2rem;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
+.ops-goal__or {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.ops-goal__go {
+  padding: 6px 12px;
+  font-size: 0.72rem;
+  margin-left: auto;
+}
+.ops-card__y,
+.ops-card__r {
+  padding: 6px 10px;
+  font-size: 0.72rem;
+}
+.ops-card__y { color: #f5a623; }
+.ops-card__r { color: #ff6b6b; }
+.ops-pts {
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  min-width: 2.4rem;
+}
+.ops-goal__field--grow { flex: 1; min-width: 8rem; }
+.ops-goal__team-sel {
+  width: 5.4rem;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
 .ops-row__foot {
   display: flex;
   justify-content: flex-end;

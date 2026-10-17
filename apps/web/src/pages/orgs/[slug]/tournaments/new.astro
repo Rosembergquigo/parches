@@ -230,6 +230,36 @@ const individual = isIndividualSport(draft.sport);
                 min="1" max="8" value={draft.qualifyingSpots} class="form-input" />
             </div>
           </div>
+
+          <div id="football-format" hidden={draft.sport !== 'football'}>
+            <p class="label">Duración del partido (fútbol)</p>
+            <p class="wiz__hint">Dos tiempos. La ficha usa este total para ubicar los eventos en la línea de tiempo.</p>
+            <div class="form-field">
+              <label class="label" for="periodMinutes">Cada tiempo</label>
+              <select id="periodMinutes" name="periodMinutes" class="form-input">
+                <option value="20" selected={draft.periodMinutes === 20}>20 minutos (40 en total)</option>
+                <option value="30" selected={draft.periodMinutes === 30}>30 minutos (60 en total)</option>
+                <option value="45" selected={draft.periodMinutes === 45}>45 minutos (90 en total)</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="label" for="extraTimeMinutes">Cada tiempo extra</label>
+              <select id="extraTimeMinutes" name="extraTimeMinutes" class="form-input">
+                <option value="5" selected={draft.extraTimeMinutes === 5}>5 minutos</option>
+                <option value="10" selected={draft.extraTimeMinutes === 10}>10 minutos</option>
+                <option value="15" selected={draft.extraTimeMinutes === 15}>15 minutos</option>
+              </select>
+            </div>
+            <label class="wiz__check">
+              <input type="checkbox" name="extraTimeAll" checked={draft.extraTimeAll} />
+              Si empatan, hay prórroga en todas las fases
+            </label>
+            <label class="wiz__check">
+              <input type="checkbox" name="penaltiesAll" checked={draft.penaltiesAll} />
+              Si empatan, hay penales en todas las fases
+            </label>
+            <p class="wiz__hint">En playoffs lo habitual es prórroga y luego penales. Luego puedes marcar solo algunas jornadas (Cruces, Final…) desde Resumen.</p>
+          </div>
         </section>
 
         <section class="wiz__panel" data-step="3">
@@ -605,6 +635,8 @@ select.form-input { appearance: none; }
       }
     }
     function syncSportUi() {
+      const footballFormat = document.getElementById('football-format');
+      if (footballFormat) footballFormat.hidden = sportSelect?.value !== 'football';
       const solo = isIndividual();
       const lead = document.getElementById('wiz-lead');
       if (lead) {

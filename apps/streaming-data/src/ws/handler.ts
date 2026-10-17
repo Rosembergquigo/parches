@@ -8,32 +8,49 @@
  *
  * Redis pub/sub actúa como bus compartido entre instancias.
  */
-import type { WebSocket } from 'ws';
+import type { SocketStream } from '@fastify/websocket';
 import type { FastifyRequest } from 'fastify';
+import type { WebSocket } from 'ws';
 import type { WSMessage, RefereeEvent } from '@parches/types';
+import { matchLiveChannel } from '@parches/config';
 import Redis from 'ioredis';
 
-const pub = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
-const sub = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+const pub = new Redis(redisUrl);
+const sub = new Redis(redisUrl);
+pub.on('error', err => console.error('redis pub', err.message));
+sub.on('error', err => console.error('redis sub', err.message));
 
 // Map local: matchId → clientes WS conectados a ESTA instancia
 const localSubscribers = new Map<string, Set<WebSocket>>();
 
+function liveSocket(connection: SocketStream): WebSocket {
+  return connection.socket;
+}
+
+function fanOut(matchId: string, payload: string): void {
+  if (!payload.startsWith('{')) return;
+  localSubscribers.get(matchId)?.forEach(ws => {
+    if (ws.readyState === 1) ws.send(payload);
+  });
+}
+
 // Escuchar eventos de Redis y reenviarlos a clientes locales
 sub.on('message', (channel: string, message: string) => {
-  const matchId = channel.replace('match:', '');
-  localSubscribers.get(matchId)?.forEach((ws) => ws.send(message));
+  const matchId = channel.startsWith('match:') ? channel.slice('match:'.length) : channel;
+  fanOut(matchId, message);
 });
 
 export function wsHandler(
-  socket: WebSocket,
+  connection: SocketStream,
   request: FastifyRequest<{ Params: { matchId: string } }>
 ) {
   const { matchId } = request.params;
+  const socket = liveSocket(connection);
 
   if (!localSubscribers.has(matchId)) {
     localSubscribers.set(matchId, new Set());
-    sub.subscribe(`match:${matchId}`);
+    sub.subscribe(matchLiveChannel(matchId));
   }
   localSubscribers.get(matchId)!.add(socket);
 
@@ -43,7 +60,7 @@ export function wsHandler(
     subs.delete(socket);
     if (subs.size === 0) {
       localSubscribers.delete(matchId);
-      sub.unsubscribe(`match:${matchId}`);
+      sub.unsubscribe(matchLiveChannel(matchId));
     }
   });
   socket.on('error', console.error);
@@ -57,5 +74,5 @@ export async function broadcastEvent(matchId: string, event: RefereeEvent): Prom
     data: event,
     timestamp: new Date().toISOString(),
   };
-  await pub.publish(`match:${matchId}`, JSON.stringify(msg));
+  await pub.publish(matchLiveChannel(matchId), JSON.stringify(msg));
 }

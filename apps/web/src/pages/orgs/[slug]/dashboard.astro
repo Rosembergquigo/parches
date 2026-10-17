@@ -43,7 +43,7 @@ const op: DashOp = OPS.includes(rawOp as DashOp) ? (rawOp as DashOp) : 'resumen'
 const individual = isIndividualSport(tournament.sport);
 
 const NAV: { id: DashOp; label: string; hint: string }[] = [
-  { id: 'resumen', label: 'Resumen', hint: 'Marca, fechas y estado' },
+  { id: 'resumen', label: 'Resumen', hint: 'Marca, fechas, estado y duración' },
   { id: 'foro', label: 'Foro', hint: 'Blog y comunicados' },
   { id: 'operar', label: 'Operar', hint: 'Fechas, sede, árbitro y estado' },
   {
@@ -86,6 +86,23 @@ function fromDatetimeLocal(value: string): string | null {
 function toDateInput(iso?: string | null): string {
   if (!iso) return '';
   return String(iso).slice(0, 10);
+}
+
+function footballStageOptions(raw: RawTournament): { value: string; label: string }[] {
+  const seen = new Set<string>();
+  const options: { value: string; label: string }[] = [];
+  const add = (value: string, label: string) => {
+    if (seen.has(value)) return;
+    seen.add(value);
+    options.push({ value, label });
+  };
+  add('', 'Fase regular (sin jornada)');
+  for (const match of raw.matches ?? []) {
+    const stage = (match.stage ?? '').trim();
+    if (stage) add(stage, stage);
+  }
+  for (const stage of ['Cruces', 'Cuartos', 'Semifinal', 'Final']) add(stage, stage);
+  return options;
 }
 
 function readTeamFields(form: FormData) {
@@ -189,6 +206,10 @@ let resumenDescription = '';
 let resumenLogo = tournament.logoUrl ?? '';
 let resumenCover = '';
 let resumenCoverUrl = '';
+let resumenPeriodMinutes = 45;
+let resumenExtraMinutes = 15;
+let resumenExtraStages: string[] = [];
+let resumenPenaltyStages: string[] = [];
 
 if (op === 'resumen') {
   try {
@@ -207,6 +228,14 @@ if (op === 'resumen') {
   resumenLogo = resumenTournament.logoUrl ?? '';
   resumenCover = resumenTournament.backgroundImageUrl ?? '';
   resumenCoverUrl = /^https?:\/\//i.test(resumenCover) ? resumenCover : '';
+  resumenPeriodMinutes = Number(resumenTournament.periodMinutes) || 45;
+  resumenExtraMinutes = Number(resumenTournament.extraTimeMinutes) || 15;
+  resumenExtraStages = Array.isArray(resumenTournament.extraTimeStages)
+    ? resumenTournament.extraTimeStages.map(v => String(v))
+    : [];
+  resumenPenaltyStages = Array.isArray(resumenTournament.penaltyStages)
+    ? resumenTournament.penaltyStages.map(v => String(v))
+    : [];
 
   if (Astro.request.method === 'POST') {
     const form = await Astro.request.formData();
@@ -217,6 +246,14 @@ if (op === 'resumen') {
     resumenColor = String(form.get('brandColor') ?? '').trim();
     resumenDescription = String(form.get('description') ?? '').trim();
     resumenCoverUrl = String(form.get('backgroundImageUrl') ?? '').trim();
+    resumenPeriodMinutes = Number(form.get('periodMinutes')) || resumenPeriodMinutes;
+    resumenExtraMinutes = Number(form.get('extraTimeMinutes')) || resumenExtraMinutes;
+    const stageFromForm = (name: string) => form.getAll(name).map(v => {
+      const value = String(v);
+      return value === '__regular__' ? '' : value;
+    });
+    resumenExtraStages = form.get('extraTimeAll') === 'on' ? ['*'] : stageFromForm('extraTimeStage');
+    resumenPenaltyStages = form.get('penaltyAll') === 'on' ? ['*'] : stageFromForm('penaltyStage');
 
     const back = `${dashFor('resumen')}&ok=1`;
     try {
@@ -241,6 +278,12 @@ if (op === 'resumen') {
           description: resumenDescription || null,
           ...(logoUrl !== undefined ? { logoUrl } : {}),
           ...(backgroundImageUrl !== undefined ? { backgroundImageUrl } : {}),
+          ...(resumenTournament.sport === 'football' ? {
+            periodMinutes: resumenPeriodMinutes,
+            extraTimeMinutes: resumenExtraMinutes,
+            extraTimeStages: resumenExtraStages,
+            penaltyStages: resumenPenaltyStages,
+          } : {}),
         },
         Astro.request
       );
@@ -300,6 +343,121 @@ if (op === 'operar') {
         const matchId = String(form.get('matchId') ?? '');
         await api.delete(`/matches/${matchId}`, Astro.request);
         return Astro.redirect(back);
+      }
+
+      if (intent === 'clock') {
+        const matchId = String(form.get('matchId') ?? '');
+        const action = String(form.get('action') ?? '');
+        await api.post(`/matches/${matchId}/clock`, { action }, Astro.request);
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'goal') {
+        const matchId = String(form.get('matchId') ?? '');
+        const scorerRaw = String(form.get('scorerJersey') ?? '').trim();
+        const assistRaw = String(form.get('assistJersey') ?? '').trim();
+        const ownRaw = String(form.get('ownGoalJersey') ?? '').trim();
+        if (scorerRaw && ownRaw) {
+          throw new Error('Usa anotador o en contra, no ambos');
+        }
+        if (!scorerRaw && !ownRaw) {
+          throw new Error('Indica # anotador o # en contra');
+        }
+        await api.post(
+          `/matches/${matchId}/events`,
+          {
+            type: 'goal',
+            teamId: String(form.get('teamId') ?? ''),
+            ...(scorerRaw ? { scorerJersey: Number(scorerRaw) } : {}),
+            ...(assistRaw ? { assistJersey: Number(assistRaw) } : {}),
+            ...(ownRaw ? { ownGoalJersey: Number(ownRaw) } : {}),
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'card') {
+        const matchId = String(form.get('matchId') ?? '');
+        const cardType = String(form.get('cardType') ?? '');
+        if (cardType !== 'yellow_card' && cardType !== 'red_card') {
+          throw new Error('Indica si es amarilla o roja');
+        }
+        const jerseyRaw = String(form.get('jersey') ?? '').trim();
+        if (!jerseyRaw) {
+          throw new Error('Indica el dorsal');
+        }
+        await api.post(
+          `/matches/${matchId}/events`,
+          {
+            type: cardType,
+            teamId: String(form.get('teamId') ?? ''),
+            jersey: Number(jerseyRaw),
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'points') {
+        const matchId = String(form.get('matchId') ?? '');
+        const pointsRaw = String(form.get('points') ?? '').trim();
+        const jerseyRaw = String(form.get('jersey') ?? '').trim();
+        if (!pointsRaw) {
+          throw new Error('Indica cuántos puntos');
+        }
+        await api.post(
+          `/matches/${matchId}/events`,
+          {
+            type: 'score_update',
+            teamId: String(form.get('teamId') ?? ''),
+            points: Number(pointsRaw),
+            ...(jerseyRaw ? { jersey: Number(jerseyRaw) } : {}),
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'note') {
+        const matchId = String(form.get('matchId') ?? '');
+        const eventType = String(form.get('eventType') ?? '');
+        if (eventType !== 'foul' && eventType !== 'substitution') {
+          throw new Error('Indica si es falta o cambio');
+        }
+        const jerseyRaw = String(form.get('jersey') ?? '').trim();
+        if (!jerseyRaw) {
+          throw new Error('Indica el dorsal');
+        }
+        await api.post(
+          `/matches/${matchId}/events`,
+          {
+            type: eventType,
+            teamId: String(form.get('teamId') ?? ''),
+            jersey: Number(jerseyRaw),
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
+      }
+
+      if (intent === 'custom') {
+        const matchId = String(form.get('matchId') ?? '');
+        const description = String(form.get('description') ?? '').trim();
+        if (!description) {
+          throw new Error('Escribe la novedad');
+        }
+        const teamId = String(form.get('teamId') ?? '').trim();
+        await api.post(
+          `/matches/${matchId}/events`,
+          {
+            type: 'custom',
+            description,
+            ...(teamId ? { teamId } : {}),
+          },
+          Astro.request
+        );
+        return Astro.redirect(`${back}#m-${matchId}`);
       }
     } catch (err: unknown) {
       operateError = err instanceof Error ? err.message : 'No se pudo guardar';
@@ -611,6 +769,84 @@ const resumenInitials =
                 class="form-input form-input--area">{resumenDescription}</textarea>
             </div>
 
+            {resumenTournament.sport === 'football' && (
+              <fieldset class="t-match-format">
+                <legend class="label">Duración del partido</legend>
+                <p class="t-match-format__hint">
+                  Dos tiempos. La línea de tiempo de la ficha usa este total para ubicar goles y tarjetas.
+                </p>
+                <div class="dash-form__row">
+                  <div class="form-field">
+                    <label class="label" for="periodMinutes">Cada tiempo</label>
+                    <select id="periodMinutes" name="periodMinutes" class="form-input">
+                      <option value="20" selected={resumenPeriodMinutes === 20}>20 minutos (partido de 40)</option>
+                      <option value="30" selected={resumenPeriodMinutes === 30}>30 minutos (partido de 60)</option>
+                      <option value="45" selected={resumenPeriodMinutes === 45}>45 minutos (partido de 90)</option>
+                    </select>
+                  </div>
+                  <div class="form-field">
+                    <label class="label" for="extraTimeMinutes">Cada tiempo extra</label>
+                    <select id="extraTimeMinutes" name="extraTimeMinutes" class="form-input">
+                      <option value="5" selected={resumenExtraMinutes === 5}>5 minutos</option>
+                      <option value="10" selected={resumenExtraMinutes === 10}>10 minutos</option>
+                      <option value="15" selected={resumenExtraMinutes === 15}>15 minutos</option>
+                    </select>
+                  </div>
+                </div>
+                <p class="label" style="margin-top: 8px;">Si hay empate</p>
+                <p class="t-match-format__hint">
+                  La prórroga (dos tiempos extra) solo se juega si van igualados. Los penales, si el empate sigue o si esa fase no tiene prórroga.
+                </p>
+                <table class="t-match-format__table">
+                  <thead>
+                    <tr>
+                      <th>Fase</th>
+                      <th>Prórroga</th>
+                      <th>Penales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Todas las fases</td>
+                      <td>
+                        <input type="checkbox" name="extraTimeAll" value="on"
+                          checked={resumenExtraStages.includes('*')}
+                          aria-label="Prórroga en todas las fases" />
+                      </td>
+                      <td>
+                        <input type="checkbox" name="penaltyAll" value="on"
+                          checked={resumenPenaltyStages.includes('*')}
+                          aria-label="Penales en todas las fases" />
+                      </td>
+                    </tr>
+                    {footballStageOptions(resumenTournament).map(opt => (
+                      <tr>
+                        <td>{opt.label}</td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            name="extraTimeStage"
+                            value={opt.value === '' ? '__regular__' : opt.value}
+                            checked={!resumenExtraStages.includes('*') && resumenExtraStages.includes(opt.value)}
+                            aria-label={`Prórroga en ${opt.label}`}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            name="penaltyStage"
+                            value={opt.value === '' ? '__regular__' : opt.value}
+                            checked={!resumenPenaltyStages.includes('*') && resumenPenaltyStages.includes(opt.value)}
+                            aria-label={`Penales en ${opt.label}`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </fieldset>
+            )}
+
             <div class="t-cover">
               <label class="t-cover__preview">
                 {resumenCover ? (
@@ -686,7 +922,7 @@ const resumenInitials =
           <div class="dash-body__head">
             <div>
               <h2 class="dash-body__title">Operar</h2>
-              <p class="dash-body__lead">Fechas, sede, árbitro y estado de los partidos.</p>
+              <p class="dash-body__lead">Fechas, sede, árbitro, estado y anotación en vivo.</p>
             </div>
           </div>
           <OperateMatches
@@ -866,6 +1102,44 @@ const resumenInitials =
   color: var(--accent);
   font-size: 0.85rem;
   margin: 0 0 14px;
+}
+.t-match-format {
+  margin: 4px 0 8px;
+  padding: 14px 16px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.t-match-format legend {
+  padding: 0 4px;
+}
+.t-match-format__hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+.t-match-format__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  margin: 0 0 8px;
+}
+.t-match-format__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 0 0 8px;
+}
+.t-match-format__table th,
+.t-match-format__table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.t-match-format__table th:not(:first-child),
+.t-match-format__table td:not(:first-child) {
+  text-align: center;
+  width: 88px;
 }
 .t-logo {
   display: flex;

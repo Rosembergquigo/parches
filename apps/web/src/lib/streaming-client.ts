@@ -1,8 +1,9 @@
 import type { WSMessage } from '@parches/types';
 import { ENDPOINTS } from '@parches/config';
+import { subscribeMatchLive } from './matchLive';
 
-export function connectToMatch(matchId: string, onMessage: (msg: WSMessage) => void): WebSocket {
-  const ws = new WebSocket(`${ENDPOINTS.STREAMING_DATA_WS}/matches/${matchId}`);
-  ws.onmessage = (e) => onMessage(JSON.parse(e.data) as WSMessage);
-  return ws;
+export function connectToMatch(matchId: string, onMessage: (msg: WSMessage) => void): () => void {
+  return subscribeMatchLive(matchId, ENDPOINTS.STREAMING_DATA_WS, msg => {
+    onMessage(msg as WSMessage);
+  });
 }

@@ -1,12 +1,14 @@
 ---
 /**
- * Ficha de empresa: lista cada torneo en minicard.
- * Si eres miembro, los atajos abren el dashboard de ese campeonato.
+ * Ficha pública de la empresa: marca + torneos en Chapi.
+ * El dashboard es atajo de miembro, no el destino del visitante.
  */
 import Base from '../../layouts/Base.astro';
 import OrgTournamentCard from '../../components/org/OrgTournamentCard.astro';
+import SearchBar from '../../components/ui/SearchBar.astro';
 import { getOrganization } from '../../lib/api';
 import { canAdminOrg } from '../../lib/session';
+import { readSearchQuery } from '../../lib/search';
 
 const { slug } = Astro.params;
 const org = await getOrganization(slug!, Astro.request);
@@ -23,11 +25,58 @@ const markBg = org.brandColor ?? '#1e232b';
 const canManage = !!org.myRole;
 const canAdmin = canAdminOrg(org.myRole);
 const justCreated = Astro.url.searchParams.get('ok') === 'creada';
+const liveTournament = org.tournaments.find(t => t.status === 'LIVE');
+const publicCta = liveTournament
+  ? { href: `/tournaments/${liveTournament.slug}`, label: 'Ver en vivo', live: true as const }
+  : org.tournaments.length > 0
+    ? { href: '#torneos', label: 'Ver torneos', live: false as const }
+    : null;
+const tournamentLabel = `${org.tournamentCount} torneo${org.tournamentCount === 1 ? '' : 's'}`;
+const shareTitle = `${org.name} | Chapi`;
+const shareDescription = org.description?.trim()
+  || `${org.name}${org.city ? ` · ${org.city}` : ''} — ${tournamentLabel} en Chapi.`;
+
+type EstadoFiltro = 'all' | 'LIVE' | 'UPCOMING' | 'FINISHED';
+const ESTADOS: { id: EstadoFiltro; slug: string | null; label: string }[] = [
+  { id: 'all', slug: null, label: 'Todos' },
+  { id: 'LIVE', slug: 'en-vivo', label: 'En vivo' },
+  { id: 'UPCOMING', slug: 'proximos', label: 'Próximos' },
+  { id: 'FINISHED', slug: 'cerrados', label: 'Cerrados' },
+];
+const estadoRaw = Astro.url.searchParams.get('estado');
+const estadoActivo = ESTADOS.find(e => e.slug === estadoRaw) ?? ESTADOS[0]!;
+const q = readSearchQuery(Astro.url);
+const visibleTournaments = estadoActivo.id === 'all'
+  ? org.tournaments
+  : org.tournaments.filter(t => t.status === estadoActivo.id);
+const estadoCounts: Record<EstadoFiltro, number> = {
+  all: org.tournaments.length,
+  LIVE: org.tournaments.filter(t => t.status === 'LIVE').length,
+  UPCOMING: org.tournaments.filter(t => t.status === 'UPCOMING').length,
+  FINISHED: org.tournaments.filter(t => t.status === 'FINISHED').length,
+};
+const emptyByEstado: Record<Exclude<EstadoFiltro, 'all'>, string> = {
+  LIVE: 'No hay torneos en vivo.',
+  UPCOMING: 'No hay torneos próximos.',
+  FINISHED: 'No hay torneos cerrados.',
+};
+const emptyFilterMessage = estadoActivo.id === 'all'
+  ? ''
+  : emptyByEstado[estadoActivo.id];
+const orgSlug = org.slug;
+function chipHref(estadoSlug: string | null) {
+  const params = new URLSearchParams();
+  if (estadoSlug) params.set('estado', estadoSlug);
+  if (q) params.set('q', q);
+  const qs = params.toString();
+  return `/orgs/${orgSlug}${qs ? `?${qs}` : ''}#torneos`;
+}
 ---
 
 <Base
-  title={`${org.name} | Chapi`}
-  description={org.description ?? `${org.name} — torneos en Chapi.`}
+  title={shareTitle}
+  description={shareDescription}
+  ogImage={org.logoUrl ?? undefined}
 >
   <header class="org-hero" style={org.brandColor ? `background: linear-gradient(135deg, ${org.brandColor}22 0%, #0a0c0f 70%)` : undefined}>
     <div class="org-hero__inner">
@@ -39,27 +88,32 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
         {org.logoUrl ? <img src={org.logoUrl} alt="" /> : initials}
       </div>
       <div class="org-hero__text">
-        <p class="org-hero__kicker">Empresa</p>
+        {org.city && <p class="org-hero__kicker">{org.city}</p>}
         <h1 class="org-hero__name">{org.name}</h1>
-        <p class="org-hero__meta">
-          {[org.city, `${org.tournamentCount} torneo${org.tournamentCount === 1 ? '' : 's'}`, `${org.memberCount} miembro${org.memberCount === 1 ? '' : 's'}`]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+        <p class="org-hero__meta">{tournamentLabel}</p>
         {org.description && <p class="org-hero__desc">{org.description}</p>}
       </div>
-      {(canManage || canAdmin) && (
-        <div class="org-hero__actions">
-          {canAdmin && (
-            <a href={`/orgs/${org.slug}/settings`} class="btn-ghost">Ajustes</a>
-          )}
-          {canManage && (
+      <div class="org-hero__actions">
+        {canManage ? (
+          <>
+            {canAdmin && (
+              <a href={`/orgs/${org.slug}/settings`} class="btn-ghost">Ajustes</a>
+            )}
             <a href={`/orgs/${org.slug}/tournaments/new`} class="btn-accent org-hero__cta">
               Crear torneo
             </a>
-          )}
-        </div>
-      )}
+          </>
+        ) : publicCta && (
+          <a
+            href={publicCta.href}
+            class:list={['btn-accent', 'org-hero__cta', publicCta.live && 'org-hero__cta--live']}
+            title={liveTournament?.name}
+          >
+            {publicCta.live && <span class="org-hero__dot" aria-hidden="true" />}
+            {publicCta.label}
+          </a>
+        )}
+      </div>
     </div>
   </header>
 
@@ -71,9 +125,34 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
           <a href={`/orgs/${org.slug}/settings`}>Ajustes</a>.
         </p>
       )}
-      <div class="org-page__title-row">
+      <div class="org-page__title-row" id="torneos">
         <h2 class="org-page__title">Torneos</h2>
+        {org.tournaments.length > 0 && (
+          <nav class="org-chips" aria-label="Filtrar torneos por estado">
+            {ESTADOS.map(e => (
+              <a
+                href={chipHref(e.slug)}
+                class:list={['org-chip', e.id === estadoActivo.id && 'is-active', e.id === 'LIVE' && 'is-live']}
+                aria-current={e.id === estadoActivo.id ? 'page' : undefined}
+              >
+                {e.label}
+                <span class="org-chip__n">{estadoCounts[e.id]}</span>
+              </a>
+            ))}
+          </nav>
+        )}
       </div>
+      {visibleTournaments.length > 0 && (
+        <div class="org-search">
+          <SearchBar
+            live
+            placeholder="Filtrar torneos"
+            ariaLabel="Filtrar torneos de esta empresa"
+            value={q}
+            id="org-q"
+          />
+        </div>
+      )}
       {org.tournaments.length === 0 ? (
         <p class="org-empty">
           Esta empresa aún no tiene torneos publicados.
@@ -84,20 +163,83 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
             </>
           )}
         </p>
+      ) : visibleTournaments.length === 0 ? (
+        <p class="org-empty">{emptyFilterMessage}</p>
       ) : (
-        <div class="org-grid">
-          {org.tournaments.map(t => (
-            <OrgTournamentCard tournament={t} orgSlug={org.slug} canManage={canManage} />
-          ))}
-        </div>
+        <>
+          <div class="org-grid" id="org-grid">
+            {visibleTournaments.map(t => (
+              <OrgTournamentCard tournament={t} orgSlug={org.slug} canManage={canManage} />
+            ))}
+          </div>
+          <p class="org-empty org-empty--live" hidden>Ningún torneo coincide.</p>
+        </>
       )}
     </div>
   </main>
 </Base>
 
+<script>
+  (function () {
+    const inputEl = document.getElementById('org-q');
+    const grid = document.getElementById('org-grid');
+    if (!(inputEl instanceof HTMLInputElement) || !grid) return;
+    const input = inputEl;
+
+    const form = input.closest('form');
+    const clearBtn = form?.querySelector<HTMLButtonElement>('.find__clear');
+    const empty = document.querySelector<HTMLElement>('.org-empty--live');
+    const cards = grid.querySelectorAll<HTMLElement>('.mini');
+    const chips = document.querySelectorAll<HTMLAnchorElement>('.org-chips a');
+
+    function fold(value: string): string {
+      return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+    }
+
+    function apply() {
+      const needle = fold(input.value);
+      let visible = 0;
+      cards.forEach(card => {
+        const hit = !needle
+          || (card.dataset.nombre ?? '').includes(needle)
+          || (card.dataset.deporte ?? '').includes(needle);
+        card.hidden = !hit;
+        if (hit) visible += 1;
+      });
+      if (empty) empty.hidden = visible > 0;
+      if (clearBtn) clearBtn.hidden = !input.value;
+
+      const url = new URL(location.href);
+      const raw = input.value.trim();
+      if (raw) url.searchParams.set('q', raw);
+      else url.searchParams.delete('q');
+      history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+
+      chips.forEach(chip => {
+        const href = new URL(chip.getAttribute('href') || chip.href, location.origin);
+        if (raw) href.searchParams.set('q', raw);
+        else href.searchParams.delete('q');
+        chip.href = `${href.pathname}${href.search}#torneos`;
+      });
+    }
+
+    form?.addEventListener('submit', event => {
+      event.preventDefault();
+      apply();
+    });
+    input.addEventListener('input', apply);
+    clearBtn?.addEventListener('click', () => {
+      input.value = '';
+      apply();
+      input.focus();
+    });
+    apply();
+  })();
+</script>
+
 <style>
 .org-hero {
-  padding: 36px 24px 28px;
+  padding: 44px 24px 32px;
   border-bottom: 1px solid var(--border);
 }
 .org-hero__inner {
@@ -105,18 +247,18 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
 }
 .org-hero__mark {
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: #fff;
   flex-shrink: 0;
@@ -163,6 +305,17 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
   flex-wrap: wrap;
 }
 .org-hero__cta { flex-shrink: 0; }
+.org-hero__cta--live {
+  background: var(--live);
+  color: #fff;
+}
+.org-hero__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px rgba(255,255,255,0.25);
+}
 .org-page { flex: 1; padding-bottom: 60px; }
 .org-page__inner {
   max-width: 1280px;
@@ -173,7 +326,10 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
   margin: 0 0 16px;
+  scroll-margin-top: 80px;
 }
 .org-page__title {
   font-family: var(--font-display);
@@ -182,9 +338,46 @@ const justCreated = Astro.url.searchParams.get('ok') === 'creada';
   letter-spacing: 0.08em;
   margin: 0;
 }
+.org-search {
+  margin: 0 0 16px;
+}
+.org-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.org-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.org-chip:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.org-chip.is-active {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.org-chip.is-live.is-active {
+  color: #fff;
+  background: var(--live);
+  border-color: var(--live);
+}
+.org-chip__n {
+  font-size: 0.65rem;
+  font-weight: 800;
+  opacity: 0.75;
+}
 .org-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
 }
 .org-empty {

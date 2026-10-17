@@ -32,7 +32,11 @@ const {
   noIndex = false,
 } = Astro.props;
 
-const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
+const origin = Astro.site ?? Astro.url.origin;
+const canonicalUrl = new URL(Astro.url.pathname, origin).href;
+const ogImageUrl = /^https?:\/\//i.test(ogImage)
+  ? ogImage
+  : new URL(ogImage, origin).href;
 
 // Carga silenciosa del usuario — nunca bloquea si el api no responde
 const session = await getSessionContext(Astro.request).catch(() => ({
@@ -56,16 +60,18 @@ const session = await getSessionContext(Astro.request).catch(() => ({
 
   <!-- Open Graph -->
   <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="Chapi" />
+  <meta property="og:locale"      content="es_CO" />
   <meta property="og:title"       content={title} />
   <meta property="og:description" content={description} />
-  <meta property="og:image"       content={ogImage} />
+  <meta property="og:image"       content={ogImageUrl} />
   <meta property="og:url"         content={canonicalUrl} />
 
   <!-- Twitter Card -->
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content={title} />
   <meta name="twitter:description" content={description} />
-  <meta name="twitter:image"       content={ogImage} />
+  <meta name="twitter:image"       content={ogImageUrl} />
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="https://disney.images.edge.bamgrid.com/ripcut-delivery/v2/variant/disney/0fbcaa30-f449-45d2-9978-5bcefc5b88ae/compose?format=webp&label=logo_round_100&width=800" />
